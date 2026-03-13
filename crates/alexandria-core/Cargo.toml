@@ -1,0 +1,29 @@
+[package]
+name = "alexandria-core"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[dependencies]
+tantivy = { workspace = true }
+notify = { workspace = true }
+htmd = { workspace = true }
+markdown_to_text = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+crossbeam-channel = { workspace = true }
+md-5 = { workspace = true }
+chrono = { workspace = true }
+url = { workspace = true }
+scraper = { workspace = true }
+
+[[example]]
+name = "filter-html"
+
+[build-dependencies]
+cbindgen = "0.27"

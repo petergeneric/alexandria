@@ -1,0 +1,9 @@
+dist/
+target/
+build/
+.DS_Store
+*.dylib
+index_data/
+*.xcuserstate
+alexandria_index/
+
