@@ -119,7 +119,8 @@ struct ResultRow: View {
     }
 }
 
-/// Highlight query keywords in text using bold + primary color against secondary base.
+/// Highlight query keywords in text using a yellow/orange background tint.
+/// Falls back to bold when the user has enabled high-contrast accessibility.
 private func highlightKeywords(in text: String, query: String) -> AttributedString {
     var attributed = AttributedString(text)
     attributed.foregroundColor = .secondary
@@ -131,6 +132,8 @@ private func highlightKeywords(in text: String, query: String) -> AttributedStri
 
     guard !keywords.isEmpty else { return attributed }
 
+    let useHighContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+
     let lower = text.lowercased()
     for keyword in keywords {
         var searchStart = lower.startIndex
@@ -138,8 +141,12 @@ private func highlightKeywords(in text: String, query: String) -> AttributedStri
             let attrStart = AttributedString.Index(range.lowerBound, within: attributed)
             let attrEnd = AttributedString.Index(range.upperBound, within: attributed)
             if let attrStart, let attrEnd {
-                attributed[attrStart..<attrEnd].inlinePresentationIntent = .stronglyEmphasized
                 attributed[attrStart..<attrEnd].foregroundColor = .primary
+                if useHighContrast {
+                    attributed[attrStart..<attrEnd].inlinePresentationIntent = .stronglyEmphasized
+                } else {
+                    attributed[attrStart..<attrEnd].backgroundColor = .yellow.opacity(0.3)
+                }
             }
             searchStart = range.upperBound
         }

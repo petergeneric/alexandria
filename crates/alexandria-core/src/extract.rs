@@ -23,7 +23,24 @@ pub fn markdown_to_plaintext(md: &str) -> String {
     let text = markdown_to_text::convert(md);
     // Clean up residual table pipe characters
     let text = text.replace(" | ", " ").replace("| ", "").replace(" |", "");
+    // Strip any residual HTML tags that htmd passed through unconverted
+    let text = strip_html_tags(&text);
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Remove HTML tags from text, preserving the text content between them.
+fn strip_html_tags(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut in_tag = false;
+    for ch in input.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => output.push(ch),
+            _ => {}
+        }
+    }
+    output
 }
 
 /// Convert HTML to plain text for search indexing.
