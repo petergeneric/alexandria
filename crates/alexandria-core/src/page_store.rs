@@ -102,6 +102,17 @@ impl PageStore {
         Ok(pages)
     }
 
+    /// Returns (count, oldest_captured_at) for pending pages, or (0, None) if none.
+    pub fn pending_summary(&self) -> Result<(u64, Option<i64>), PageStoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT COUNT(*), MIN(captured_at) FROM pages WHERE indexed_at IS NULL",
+        )?;
+        let (count, oldest): (u64, Option<i64>) = stmt.query_row([], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
+        Ok((count, oldest))
+    }
+
     pub fn mark_indexed(&self, source_hash: &str) -> Result<(), PageStoreError> {
         let now = chrono::Utc::now().timestamp();
         self.db.execute(

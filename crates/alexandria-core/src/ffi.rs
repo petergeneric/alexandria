@@ -29,6 +29,12 @@ pub struct AlexandriaSearchResult {
     pub visited_at_secs: Option<i64>,
 }
 
+#[derive(uniffi::Record)]
+pub struct PendingStatus {
+    pub count: u64,
+    pub oldest_captured_at_secs: Option<i64>,
+}
+
 #[derive(uniffi::Object)]
 pub struct AlexandriaEngine {
     engine: SearchEngine,
@@ -107,6 +113,20 @@ impl AlexandriaEngine {
         let _ = std::fs::remove_file(&marker);
 
         Ok(())
+    }
+
+    pub fn pending_status(&self, store_path: String) -> Result<PendingStatus, AlexandriaError> {
+        let store =
+            PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        let (count, oldest) = store.pending_summary().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+        Ok(PendingStatus {
+            count,
+            oldest_captured_at_secs: oldest,
+        })
     }
 
     pub fn ingest_from_store(&self, store_path: String) -> Result<u64, AlexandriaError> {

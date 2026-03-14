@@ -100,6 +100,11 @@ struct SearchView: View {
                     }
                 }
             }
+            // Pending pages status bar
+            if viewModel.pendingCount > 0 {
+                Divider()
+                PendingStatusBar(viewModel: viewModel)
+            }
         }
         .frame(minWidth: 600, minHeight: 300)
     }
@@ -107,6 +112,67 @@ struct SearchView: View {
     private func openURL(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
         NSWorkspace.shared.open(url)
+    }
+}
+
+private struct PendingStatusBar: View {
+    @ObservedObject var viewModel: SearchViewModel
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            Text(statusText)
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            if viewModel.isIndexing {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Indexing...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                Button("Index Now") {
+                    viewModel.indexNow()
+                }
+                .font(.caption)
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var statusText: String {
+        let count = viewModel.pendingCount
+        let pages = count == 1 ? "page" : "pages"
+        if let oldest = viewModel.pendingOldest {
+            let ago = Self.relativeAge(oldest)
+            return "Excludes \(count) \(pages) pending index from last \(ago)"
+        }
+        return "Excludes \(count) \(pages) pending index"
+    }
+
+    private static func relativeAge(_ date: Date) -> String {
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 60 { return "minute" }
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return minutes == 1 ? "minute" : "\(minutes) minutes"
+        }
+        let hours = minutes / 60
+        if hours < 24 {
+            return hours == 1 ? "hour" : "\(hours) hours"
+        }
+        let days = hours / 24
+        return days == 1 ? "day" : "\(days) days"
     }
 }
 

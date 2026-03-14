@@ -34,6 +34,14 @@ class SearchEngineWrapper {
         return Int(count)
     }
 
+    func pendingStatus(storePath: String) -> (count: UInt64, oldestCapturedAt: Date?) {
+        guard let status = try? engine.pendingStatus(storePath: storePath) else {
+            return (0, nil)
+        }
+        let date = status.oldestCapturedAtSecs.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+        return (status.count, date)
+    }
+
     func docCount() -> UInt64 {
         guard let count = try? engine.docCount() else { return 0 }
         return count

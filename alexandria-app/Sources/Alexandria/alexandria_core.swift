@@ -514,6 +514,8 @@ public protocol AlexandriaEngineProtocol : AnyObject {
     
     func ingestFromStore(storePath: String) throws  -> UInt64
     
+    func pendingStatus(storePath: String) throws  -> PendingStatus
+    
     func search(query: String, limit: UInt32, offset: UInt32) throws  -> [AlexandriaSearchResult]
     
 }
@@ -600,6 +602,14 @@ open func ingest(sourceDir: String)throws  -> UInt64 {
 open func ingestFromStore(storePath: String)throws  -> UInt64 {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
     uniffi_alexandria_core_fn_method_alexandriaengine_ingest_from_store(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),$0
+    )
+})
+}
+    
+open func pendingStatus(storePath: String)throws  -> PendingStatus {
+    return try  FfiConverterTypePendingStatus.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_pending_status(self.uniffiClonePointer(),
         FfiConverterString.lower(storePath),$0
     )
 })
@@ -768,6 +778,72 @@ public func FfiConverterTypeAlexandriaSearchResult_lower(_ value: AlexandriaSear
 }
 
 
+public struct PendingStatus {
+    public var count: UInt64
+    public var oldestCapturedAtSecs: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(count: UInt64, oldestCapturedAtSecs: Int64?) {
+        self.count = count
+        self.oldestCapturedAtSecs = oldestCapturedAtSecs
+    }
+}
+
+
+
+extension PendingStatus: Equatable, Hashable {
+    public static func ==(lhs: PendingStatus, rhs: PendingStatus) -> Bool {
+        if lhs.count != rhs.count {
+            return false
+        }
+        if lhs.oldestCapturedAtSecs != rhs.oldestCapturedAtSecs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(count)
+        hasher.combine(oldestCapturedAtSecs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePendingStatus: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PendingStatus {
+        return
+            try PendingStatus(
+                count: FfiConverterUInt64.read(from: &buf), 
+                oldestCapturedAtSecs: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PendingStatus, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.count, into: &buf)
+        FfiConverterOptionInt64.write(value.oldestCapturedAtSecs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePendingStatus_lift(_ buf: RustBuffer) throws -> PendingStatus {
+    return try FfiConverterTypePendingStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePendingStatus_lower(_ value: PendingStatus) -> RustBuffer {
+    return FfiConverterTypePendingStatus.lower(value)
+}
+
+
 public enum AlexandriaError {
 
     
@@ -916,6 +992,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_ingest_from_store() != 48440) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_pending_status() != 46783) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_search() != 43099) {

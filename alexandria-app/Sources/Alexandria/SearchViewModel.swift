@@ -41,6 +41,9 @@ class SearchViewModel: ObservableObject {
     @Published var isSearching = false
     @Published var selectedDateRange: DateRangeFilter = .all
     @Published var selectedDomains: Set<String> = []
+    @Published var pendingCount: UInt64 = 0
+    @Published var pendingOldest: Date? = nil
+    @Published var isIndexing = false
 
     var filteredResults: [SearchResult] {
         results.filter { result in
@@ -74,11 +77,13 @@ class SearchViewModel: ObservableObject {
     }
 
     private let engine: SearchEngineWrapper?
+    private let storePath: String
     private var debounceTask: Task<Void, Never>?
 
     init() {
         let indexPath = Self.resolveIndexPath()
         engine = SearchEngineWrapper(indexPath: indexPath)
+        storePath = AppSettings.shared.storePath
         if engine == nil {
             print("Warning: could not open index at \(indexPath)")
         }
@@ -113,13 +118,38 @@ class SearchViewModel: ObservableObject {
 
         isSearching = true
         let q = query
+        let sp = storePath
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let searchResults = engine.search(query: q, limit: 50)
+            let status = engine.pendingStatus(storePath: sp)
             DispatchQueue.main.async {
                 guard let self = self, self.query == q else { return }
                 self.results = searchResults
+                self.pendingCount = status.count
+                self.pendingOldest = status.oldestCapturedAt
                 self.isSearching = false
+            }
+        }
+    }
+
+    func indexNow() {
+        guard let engine = engine, !isIndexing else { return }
+        isIndexing = true
+        let sp = storePath
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let _ = engine.ingestFromStore(storePath: sp)
+            let status = engine.pendingStatus(storePath: sp)
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.pendingCount = status.count
+                self.pendingOldest = status.oldestCapturedAt
+                self.isIndexing = false
+                // Re-run search to include newly indexed pages
+                if !self.query.isEmpty {
+                    self.performSearch()
+                }
             }
         }
     }
