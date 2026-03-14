@@ -97,9 +97,11 @@ struct ResultRow: View {
                     .font(.caption2)
                     .foregroundColor(.gray)
                 Spacer()
-                Text(String(format: "%.1f", result.score))
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                if let when = result.visitedAt {
+                    Text(formatRelativeTime(when))
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -117,6 +119,62 @@ struct ResultRow: View {
         Divider()
             .padding(.leading, 12)
     }
+}
+
+private func formatRelativeTime(_ date: Date) -> String {
+    let now = Date()
+    let seconds = now.timeIntervalSince(date)
+    let calendar = Calendar.current
+
+    if seconds < 0 {
+        return formatTime(date)
+    }
+
+    // Less than 5 minutes: "just now"
+    if seconds < 300 {
+        return "just now"
+    }
+
+    // Last hour
+    if seconds < 3600 {
+        let mins = Int(seconds / 60)
+        return "\(mins) minutes ago"
+    }
+
+    // Today: show time
+    if calendar.isDateInToday(date) {
+        return formatTime(date)
+    }
+
+    // Yesterday
+    if calendar.isDateInYesterday(date) {
+        return "yesterday \(formatTime(date))"
+    }
+
+    // This week (within last 7 days)
+    let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+    if days < 7 {
+        let dayName = date.formatted(.dateTime.weekday(.wide))
+        return "\(dayName) \(formatTime(date))"
+    }
+
+    // Last week
+    if days < 14 {
+        return "last week"
+    }
+
+    // Last 10 months: "4 Jan"
+    let months = calendar.dateComponents([.month], from: date, to: now).month ?? 0
+    if months < 10 {
+        return date.formatted(.dateTime.day().month(.abbreviated))
+    }
+
+    // Older: "4 Jan 2025"
+    return date.formatted(.dateTime.day().month(.abbreviated).year())
+}
+
+private func formatTime(_ date: Date) -> String {
+    date.formatted(.dateTime.hour().minute())
 }
 
 /// Highlight query keywords in text using a yellow/orange background tint.

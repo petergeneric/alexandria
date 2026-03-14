@@ -7,6 +7,7 @@ struct SearchResult: Identifiable {
     let snippet: String
     let domain: String
     let score: Float
+    let visitedAt: Date?
 }
 
 class SearchEngineWrapper {
@@ -26,6 +27,16 @@ class SearchEngineWrapper {
         return Int(count)
     }
 
+    func docCount() -> UInt64 {
+        guard let count = try? engine.docCount() else { return 0 }
+        return count
+    }
+
+    func clearIndex() -> Bool {
+        guard let _ = try? engine.clearIndex() else { return false }
+        return true
+    }
+
     func search(query: String, limit: Int = 20, offset: Int = 0) -> [SearchResult] {
         guard !query.isEmpty else { return [] }
 
@@ -43,7 +54,8 @@ class SearchEngineWrapper {
                 title: r.title,
                 snippet: r.contentSnippet,
                 domain: r.domain,
-                score: r.score
+                score: r.score,
+                visitedAt: r.visitedAtSecs.map { Date(timeIntervalSince1970: TimeInterval($0)) }
             )
         }
     }

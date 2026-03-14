@@ -56,19 +56,15 @@ class SearchViewModel: ObservableObject {
     }
 
     static func resolveIndexPath() -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let candidates = [
-            home.appendingPathComponent("alexandria_index").path,
-            home.appendingPathComponent(".alexandria/index").path,
-            "./alexandria_index",
-        ]
+        let fm = FileManager.default
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let indexDir = appSupport.appendingPathComponent("works.peter.alexandria/index")
+        let path = indexDir.path
 
-        for path in candidates {
-            if FileManager.default.fileExists(atPath: path + "/meta.json") {
-                return path
-            }
+        if !fm.fileExists(atPath: path) {
+            try? fm.createDirectory(at: indexDir, withIntermediateDirectories: true)
         }
 
-        return candidates[0]
+        return path
     }
 }

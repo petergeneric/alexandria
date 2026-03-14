@@ -24,6 +24,7 @@ pub struct AlexandriaSearchResult {
     pub content_snippet: String,
     pub domain: String,
     pub score: f32,
+    pub visited_at_secs: Option<i64>,
 }
 
 #[derive(uniffi::Object)]
@@ -72,8 +73,38 @@ impl AlexandriaEngine {
                 content_snippet: r.content_snippet,
                 domain: r.domain,
                 score: r.score,
+                visited_at_secs: r.visited_at.map(|dt| dt.timestamp()),
             })
             .collect())
+    }
+
+    pub fn doc_count(&self) -> Result<u64, AlexandriaError> {
+        let reader = self.index.reader().map_err(|e| AlexandriaError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        let searcher = reader.searcher();
+        Ok(searcher.num_docs())
+    }
+
+    pub fn clear_index(&self) -> Result<(), AlexandriaError> {
+        let mut writer: tantivy::IndexWriter<tantivy::TantivyDocument> = self
+            .index
+            .writer(50_000_000)
+            .map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        writer.delete_all_documents().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+        writer.commit().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
+        // Remove .last-indexed marker so next ingest does a full scan
+        let marker = Path::new(&self.index_path).join(".last-indexed");
+        let _ = std::fs::remove_file(&marker);
+
+        Ok(())
     }
 
     pub fn ingest(&self, source_dir: String) -> Result<u64, AlexandriaError> {

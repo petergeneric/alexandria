@@ -1,0 +1,4 @@
+module alexandria_coreFFI {
+    header "alexandria_coreFFI.h"
+    export *
+}

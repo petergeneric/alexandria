@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 class SearchPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 680, height: 480),
@@ -31,5 +33,24 @@ class SearchPanel: NSPanel {
         contentView = hostingView
 
         center()
+    }
+
+    func focusSearchField() {
+        guard let contentView else { return }
+        if let textField = findTextField(in: contentView) {
+            makeFirstResponder(textField)
+        }
+    }
+
+    private func findTextField(in view: NSView) -> NSTextField? {
+        for subview in view.subviews {
+            if let textField = subview as? NSTextField, textField.isEditable {
+                return textField
+            }
+            if let found = findTextField(in: subview) {
+                return found
+            }
+        }
+        return nil
     }
 }

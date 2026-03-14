@@ -1,3 +1,4 @@
+use chrono::{DateTime, Datelike, Local, Utc};
 use clap::{Parser, Subcommand};
 use alexandria_core::index::{build_schema, index_snapshots, open_or_create_index};
 use alexandria_core::ingest::{IngestSource, RecollFileSource};
@@ -104,6 +105,61 @@ fn highlight_keywords(text: &str, query: &str) -> String {
     result.push_str(&text[last_end..]);
 
     result
+}
+
+fn format_relative_time(dt: &DateTime<Utc>) -> String {
+    let now = Local::now();
+    let local_dt = dt.with_timezone(&now.timezone());
+    let duration = now.signed_duration_since(local_dt);
+
+    let total_seconds = duration.num_seconds();
+    if total_seconds < 0 {
+        return local_dt.format("%H:%M").to_string();
+    }
+
+    // Less than 5 minutes: "just now"
+    if total_seconds < 300 {
+        return "just now".to_string();
+    }
+
+    // Last hour
+    if total_seconds < 3600 {
+        let mins = total_seconds / 60;
+        return format!("{mins} minutes ago");
+    }
+
+    let today = now.date_naive();
+    let dt_date = local_dt.date_naive();
+
+    // Today: show time
+    if dt_date == today {
+        return local_dt.format("%H:%M").to_string();
+    }
+
+    // Yesterday
+    if dt_date == today.pred_opt().unwrap_or(today) {
+        return format!("yesterday {}", local_dt.format("%H:%M"));
+    }
+
+    // This week (within last 7 days)
+    let days_ago = (today - dt_date).num_days();
+    if days_ago < 7 {
+        return format!("{} {}", local_dt.format("%A"), local_dt.format("%H:%M"));
+    }
+
+    // Last week
+    if days_ago < 14 {
+        return "last week".to_string();
+    }
+
+    // Last 10 months: "4 Jan"
+    let months_diff = (now.year() - local_dt.year()) * 12 + (now.month() as i32 - local_dt.month() as i32);
+    if months_diff < 10 {
+        return local_dt.format("%-d %b").to_string();
+    }
+
+    // Older: "4 Jan 2025"
+    local_dt.format("%-d %b %Y").to_string()
 }
 
 fn read_last_indexed(index_path: &Path) -> Option<SystemTime> {
@@ -225,9 +281,14 @@ fn main() {
                         println!("---");
                     }
                     println!("{}", highlight_keywords(&result.title, &query));
+                    let when = result.visited_at
+                        .map(|dt| format_relative_time(&dt))
+                        .unwrap_or_default();
                     println!("  URL:    {}", result.url);
                     println!("  Domain: {}", result.domain);
-                    println!("  Score:  {:.2}", result.score);
+                    if !when.is_empty() {
+                        println!("  When:   {}", when);
+                    }
                     if raw {
                         println!("\n{}\n", result.html);
                     } else {

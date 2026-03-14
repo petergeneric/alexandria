@@ -22,7 +22,7 @@ pub struct SchemaFields {
     pub content: Field,
     pub html: Field,
     pub domain: Field,
-    pub indexed_at: Field,
+    pub visited_at: Field,
     pub source_hash: Field,
 }
 
@@ -37,7 +37,7 @@ pub fn build_schema() -> (Schema, SchemaFields) {
     // raw HTML stored for display
     let html = builder.add_text_field("html", STORED);
     let domain = builder.add_text_field("domain", STRING | STORED);
-    let indexed_at = builder.add_date_field("indexed_at", INDEXED | STORED);
+    let visited_at = builder.add_date_field("visited_at", INDEXED | STORED);
     let source_hash = builder.add_text_field("source_hash", STRING | STORED);
 
     let schema = builder.build();
@@ -47,7 +47,7 @@ pub fn build_schema() -> (Schema, SchemaFields) {
         content,
         html,
         domain,
-        indexed_at,
+        visited_at,
         source_hash,
     };
 
@@ -93,14 +93,14 @@ pub fn index_snapshots(
             continue;
         }
 
-        let now = tantivy::DateTime::from_timestamp_secs(chrono::Utc::now().timestamp());
+        let visited = tantivy::DateTime::from_timestamp_secs(snapshot.captured_at.timestamp());
         let mut doc = TantivyDocument::new();
         doc.add_text(fields.url, &snapshot.url);
         doc.add_text(fields.title, &snapshot.title);
         doc.add_text(fields.content, &snapshot.content);
         doc.add_text(fields.html, &snapshot.html);
         doc.add_text(fields.domain, &snapshot.domain);
-        doc.add_date(fields.indexed_at, now);
+        doc.add_date(fields.visited_at, visited);
         doc.add_text(fields.source_hash, &snapshot.source_hash);
 
         writer.add_document(doc)?;

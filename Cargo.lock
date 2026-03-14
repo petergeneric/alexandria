@@ -16,6 +16,7 @@ name = "alexandria-cli"
 version = "0.1.0"
 dependencies = [
  "alexandria-core",
+ "chrono",
  "clap",
  "dirs",
  "serde_json",

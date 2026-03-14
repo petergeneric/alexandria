@@ -129,6 +129,16 @@ impl IngestSource for RecollFileSource {
                     let filtered_html = filter::filter_html(&raw_html, &domain);
                     let content = extract::html_to_plaintext(&filtered_html);
 
+                    let captured_at = entry
+                        .metadata()
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| {
+                            let dur = t.duration_since(std::time::UNIX_EPOCH).ok()?;
+                            DateTime::from_timestamp(dur.as_secs() as i64, 0)
+                        })
+                        .unwrap_or_else(Utc::now);
+
                     snapshots.push(PageSnapshot {
                         url: metadata.url,
                         title,
@@ -136,7 +146,7 @@ impl IngestSource for RecollFileSource {
                         html: raw_html,
                         domain,
                         source_hash: hash,
-                        captured_at: Utc::now(),
+                        captured_at,
                     });
                 }
             }

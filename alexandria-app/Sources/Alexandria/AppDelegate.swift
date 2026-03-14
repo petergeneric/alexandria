@@ -15,10 +15,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            button.image = NSImage(
-                systemSymbolName: "building.columns",
-                accessibilityDescription: "Alexandria"
-            )
+            if let iconURL = Bundle.module.url(forResource: "icon", withExtension: "svg"),
+               let image = NSImage(contentsOf: iconURL) {
+                image.isTemplate = true
+                image.size = NSSize(width: 18, height: 18)
+                button.image = image
+            }
             button.action = #selector(statusItemClicked)
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -78,6 +80,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         searchPanel?.center()
         NSApp.activate(ignoringOtherApps: true)
 
+        // Focus the search field after the view hierarchy is laid out
+        DispatchQueue.main.async { [weak self] in
+            self?.searchPanel?.focusSearchField()
+        }
+
         // Trigger background ingest when panel is opened
         ingester?.ingestIfNeeded()
     }
@@ -97,7 +104,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             let hostingView = NSHostingView(rootView: SettingsView())
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 480, height: 160),
+                contentRect: NSRect(x: 0, y: 0, width: 480, height: 220),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
@@ -107,6 +114,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.center()
             settingsWindow = window
         }
+        searchPanel?.close()
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

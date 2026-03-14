@@ -18,6 +18,7 @@ let package = Package(
             name: "Alexandria",
             dependencies: ["alexandria_coreFFI"],
             exclude: ["Info.plist"],
+            resources: [.copy("Resources/icon.svg")],
             linkerSettings: [
                 .unsafeFlags([
                     "-L\(workspaceRoot)/target/release",

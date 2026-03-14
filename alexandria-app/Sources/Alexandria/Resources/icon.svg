@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <g fill="#000000">
+    
+    <!-- Base platform -->
+    <rect x="60" y="200" width="136" height="20" rx="2"/>
+    
+    <!-- Lower tower -->
+    <rect x="80" y="140" width="96" height="60"/>
+    
+    <!-- Middle tower -->
+    <rect x="96" y="90" width="64" height="50"/>
+    
+    <!-- Upper tower -->
+    <rect x="110" y="60" width="36" height="30"/>
+    
+    <!-- Lantern room -->
+    <rect x="116" y="40" width="24" height="20"/>
+    
+    <!-- Dome -->
+    <path d="M128 24c-10 0-16 6-16 16h32c0-10-6-16-16-16z"/>
+    
+    <!-- Spire -->
+    <rect x="126" y="14" width="4" height="10"/>
+    
+    <!-- Light rays (stylized) -->
+    <polygon points="128,40 150,32 150,48"/>
+    <polygon points="128,40 106,32 106,48"/>
+    
+  </g>
+</svg>

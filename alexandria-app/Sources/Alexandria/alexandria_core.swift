@@ -431,6 +431,22 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
     typealias FfiType = Float
     typealias SwiftType = Float
@@ -489,6 +505,10 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 
 public protocol AlexandriaEngineProtocol : AnyObject {
+    
+    func clearIndex() throws 
+    
+    func docCount() throws  -> UInt64
     
     func ingest(sourceDir: String) throws  -> UInt64
     
@@ -553,6 +573,19 @@ public static func `open`(indexPath: String)throws  -> AlexandriaEngine {
 }
     
 
+    
+open func clearIndex()throws  {try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_clear_index(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+open func docCount()throws  -> UInt64 {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_doc_count(self.uniffiClonePointer(),$0
+    )
+})
+}
     
 open func ingest(sourceDir: String)throws  -> UInt64 {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
@@ -633,15 +666,17 @@ public struct AlexandriaSearchResult {
     public var contentSnippet: String
     public var domain: String
     public var score: Float
+    public var visitedAtSecs: Int64?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(url: String, title: String, contentSnippet: String, domain: String, score: Float) {
+    public init(url: String, title: String, contentSnippet: String, domain: String, score: Float, visitedAtSecs: Int64?) {
         self.url = url
         self.title = title
         self.contentSnippet = contentSnippet
         self.domain = domain
         self.score = score
+        self.visitedAtSecs = visitedAtSecs
     }
 }
 
@@ -664,6 +699,9 @@ extension AlexandriaSearchResult: Equatable, Hashable {
         if lhs.score != rhs.score {
             return false
         }
+        if lhs.visitedAtSecs != rhs.visitedAtSecs {
+            return false
+        }
         return true
     }
 
@@ -673,6 +711,7 @@ extension AlexandriaSearchResult: Equatable, Hashable {
         hasher.combine(contentSnippet)
         hasher.combine(domain)
         hasher.combine(score)
+        hasher.combine(visitedAtSecs)
     }
 }
 
@@ -688,7 +727,8 @@ public struct FfiConverterTypeAlexandriaSearchResult: FfiConverterRustBuffer {
                 title: FfiConverterString.read(from: &buf), 
                 contentSnippet: FfiConverterString.read(from: &buf), 
                 domain: FfiConverterString.read(from: &buf), 
-                score: FfiConverterFloat.read(from: &buf)
+                score: FfiConverterFloat.read(from: &buf), 
+                visitedAtSecs: FfiConverterOptionInt64.read(from: &buf)
         )
     }
 
@@ -698,6 +738,7 @@ public struct FfiConverterTypeAlexandriaSearchResult: FfiConverterRustBuffer {
         FfiConverterString.write(value.contentSnippet, into: &buf)
         FfiConverterString.write(value.domain, into: &buf)
         FfiConverterFloat.write(value.score, into: &buf)
+        FfiConverterOptionInt64.write(value.visitedAtSecs, into: &buf)
     }
 }
 
@@ -794,6 +835,30 @@ extension AlexandriaError: Foundation.LocalizedError {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
+    typealias SwiftType = Int64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeAlexandriaSearchResult: FfiConverterRustBuffer {
     typealias SwiftType = [AlexandriaSearchResult]
 
@@ -830,6 +895,12 @@ private var initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_alexandria_core_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_clear_index() != 25128) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_doc_count() != 27746) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_ingest() != 43877) {
         return InitializationResult.apiChecksumMismatch

@@ -1,5 +1,6 @@
 // Search interface over the Tantivy index
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
@@ -26,6 +27,7 @@ pub struct SearchResult {
     pub html: String,
     pub domain: String,
     pub score: f32,
+    pub visited_at: Option<DateTime<Utc>>,
 }
 
 pub struct SearchEngine {
@@ -78,6 +80,13 @@ impl SearchEngine {
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
+            let visited_at = doc
+                .get_first(self.fields.visited_at)
+                .and_then(|v| v.as_datetime())
+                .map(|dt| {
+                    DateTime::from_timestamp(dt.into_timestamp_secs(), 0)
+                        .unwrap_or_default()
+                });
             let filtered = filter::filter_html(&html, &domain);
             let plaintext = extract::html_to_plaintext(&filtered);
             let content_snippet = kwic_snippet(&plaintext, query_str, 200);
@@ -89,6 +98,7 @@ impl SearchEngine {
                 html,
                 domain,
                 score,
+                visited_at,
             });
         }
 
