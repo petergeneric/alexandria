@@ -1,4 +1,4 @@
-// Tantivy index management
+//! Tantivy index management: schema definition, index creation, dedup, and batch indexing.
 
 use std::path::Path;
 use tantivy::schema::*;

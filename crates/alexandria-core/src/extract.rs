@@ -1,4 +1,5 @@
-// HTML extraction utilities
+//! HTML extraction utilities: HTML → Markdown → plaintext pipeline,
+//! title extraction, URL extraction, and domain extraction.
 
 use htmd::HtmlToMarkdown;
 
@@ -49,7 +50,7 @@ pub fn html_to_plaintext(html: &str) -> String {
     markdown_to_plaintext(&md)
 }
 
-/// Extract the <title> from an HTML document using simple string parsing.
+/// Extract the `<title>` from an HTML document using simple string parsing.
 pub fn extract_title(html: &str) -> String {
     extract_title_inner(html).unwrap_or_default()
 }

@@ -1,4 +1,6 @@
-// Queue: bounded channel decoupling ingestion from indexing
+//! Bounded crossbeam channel decoupling ingestion from indexing.
+//!
+//! Provides backpressure: if the queue is full, new snapshots are dropped with a warning.
 
 use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
 

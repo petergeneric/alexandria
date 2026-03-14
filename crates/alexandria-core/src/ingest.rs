@@ -1,9 +1,12 @@
-// Ingestion module: core types for page snapshots
+//! Core types for page snapshots.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// A snapshot of a web page, ready for indexing.
+/// A web page snapshot ready for Tantivy indexing.
+///
+/// Created from a [`crate::page_store::StoredPage`] by filtering HTML and
+/// converting to plaintext via the HTML → Markdown → plaintext pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageSnapshot {
     pub url: String,

@@ -39,13 +39,19 @@ alex search [OPTIONS] <QUERY>
 | `QUERY` | Search query (required) | |
 | `-l, --limit` | Maximum results | 10 |
 | `-o, --offset` | Result offset for pagination | 0 |
-| `--raw` | Show full stored HTML instead of snippet | off |
+| `--store` | Path to the page store database (for snippets) | auto-detected (see below) |
 
-**Output** (default): One result per block with title, URL, domain, relative time, score, and KWIC snippet with keyword highlighting (ANSI bold yellow).
+### Store Discovery
 
-**Output** (`--raw`): Full stored HTML content per result instead of snippet.
+If `--store` is not provided, the CLI looks for `pages.db` at:
 
-**Output** (`--json`): JSON array of `SearchResult` objects (includes both `content_snippet` and `html` fields).
+1. `~/Library/Application Support/works.peter.alexandria/pages.db`
+
+If found, snippets are generated from stored HTML. If not found, snippets are omitted.
+
+**Output** (default): One result per block with title, URL, domain, relative time, and KWIC snippet with keyword highlighting (ANSI bold yellow).
+
+**Output** (`--json`): JSON array of `SearchResult` objects.
 
 **Exit codes**: 0 = success (even if no results), 1 = error (index not found, query parse failure)
 

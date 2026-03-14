@@ -1,4 +1,7 @@
-// UniFFI interface for Swift integration
+//! UniFFI interface for the macOS Swift app.
+//!
+//! Exposes [`AlexandriaEngine`] as the main entry point for search, ingestion,
+//! and index management via proc-macro-generated Swift bindings.
 
 use std::path::Path;
 use std::sync::Arc;

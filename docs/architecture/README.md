@@ -53,7 +53,7 @@
 1. **Browser extension capture**: Pages are captured by the Firefox extension and stored in SQLite with compressed HTML
 2. **Dedup by source hash**: Each document has a unique `source_hash` checked before indexing
 3. **Plaintext indexed, HTML in SQLite**: Tantivy indexes plaintext for search; raw HTML lives in SQLite for snippet generation
-4. **Power-aware processing**: Indexing pauses on low battery and Low Power Mode
+4. **Power-aware processing**: The macOS app pauses indexing on low battery and Low Power Mode
 5. **Thread-safe pipeline**: Ingestion and indexing run on separate threads, connected by a bounded crossbeam channel
 
 ## Data Flow

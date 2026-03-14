@@ -1,4 +1,7 @@
-// Site-specific HTML filtering to remove navigation chrome before indexing.
+//! Site-specific HTML filtering to remove navigation chrome before indexing.
+//!
+//! Strips boilerplate elements (navigation, ads, sidebars, interaction buttons)
+//! for known sites: Hacker News, Reddit, and Bluesky.
 
 use scraper::{Html, Selector};
 

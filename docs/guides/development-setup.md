@@ -42,37 +42,6 @@ cargo test -p alexandria-core
 ./target/debug/alex search "rust" --limit 5 --offset 10
 ```
 
-## Project Structure
-
-```
-alexandria/
-  CLAUDE.md                   # Project context for Claude Code
-  Cargo.toml                  # Workspace root
-  crates/
-    alexandria-core/
-      Cargo.toml
-      src/
-        lib.rs                # Module declarations
-        ingest.rs             # PageSnapshot type
-        extract.rs            # HTML->Markdown->plaintext extraction
-        filter.rs             # Site-specific HTML filtering
-        index.rs              # Tantivy schema and indexing
-        search.rs             # Search engine with KWIC snippets
-        page_store.rs         # SQLite page storage
-        queue.rs              # Bounded channel queue
-        ffi.rs                # UniFFI bindings for Swift
-    alexandria-cli/
-      Cargo.toml
-      src/
-        main.rs               # CLI: search command
-  alexandria-app/             # Swift macOS app (SwiftUI + UniFFI)
-  extension/                  # Firefox extension
-  docs/
-    architecture/             # Design documents
-    api/                      # API reference
-    guides/                   # This file and others
-```
-
 ## Key Dependencies
 
 | Crate | Purpose |

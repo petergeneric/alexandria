@@ -1,4 +1,7 @@
-// SQLite-backed page store for browser extension captures
+//! SQLite-backed page store for browser extension captures.
+//!
+//! Pages are stored with zstd-compressed HTML and tracked for Tantivy indexing
+//! via an `indexed_at` column (NULL until indexed).
 
 use rusqlite::{params, Connection};
 use std::path::Path;

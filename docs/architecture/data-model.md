@@ -54,17 +54,3 @@ Before indexing a `PageSnapshot`, the system queries the index for a document wi
 2. If `Count > 0`, skip the document
 3. Otherwise, index it
 
-## PageSnapshot Struct
-
-The intermediate representation between the page store and indexing:
-
-```rust
-pub struct PageSnapshot {
-    pub url: String,
-    pub title: String,
-    pub content: String,     // plaintext for indexing
-    pub domain: String,
-    pub source_hash: String,
-    pub captured_at: DateTime<Utc>,
-}
-```

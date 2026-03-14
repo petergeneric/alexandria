@@ -1,4 +1,7 @@
-// Search interface over the Tantivy index
+//! Full-text search over the Tantivy index.
+//!
+//! Queries are parsed across title (3x boost), domain (2x boost), and content (1x) fields.
+//! Snippets are generated at search time using KWIC extraction from HTML stored in SQLite.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -22,16 +25,19 @@ pub enum SearchError {
     Index(#[from] crate::index::IndexError),
 }
 
+/// A single search result with metadata and a KWIC snippet.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     pub url: String,
     pub title: String,
+    /// Keyword-in-context plaintext snippet (~200 chars).
     pub content_snippet: String,
     pub domain: String,
     pub score: f32,
     pub visited_at: Option<DateTime<Utc>>,
 }
 
+/// Wraps a Tantivy index for querying with field boosting and KWIC snippet generation.
 pub struct SearchEngine {
     index: Index,
     fields: SchemaFields,
