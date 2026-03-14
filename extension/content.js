@@ -20,7 +20,14 @@
     };
   }
 
-  var SKIP_TAGS = { INPUT: true, SELECT: true, STYLE: true };
+  var SKIP_TAGS = {
+    INPUT: true,
+    SELECT: true,
+    STYLE: true,
+    SCRIPT: true,
+    NOSCRIPT: true,
+    SVG: true,
+  };
 
   // Serialize the live DOM, skipping input state and sensitive elements.
   function sanitizedOuterHTML() {
@@ -51,11 +58,11 @@
     parts.push("<");
     parts.push(tag.toLowerCase());
 
-    // Serialize attributes, filtering sensitive ones
+    // Serialize attributes, filtering noise and sensitive ones
     for (var i = 0; i < node.attributes.length; i++) {
       var attr = node.attributes[i];
-      // Strip form action URLs
       if (tag === "FORM" && attr.name === "action") continue;
+      if (attr.name.startsWith("data-")) continue;
       parts.push(" ");
       parts.push(attr.name);
       parts.push('="');

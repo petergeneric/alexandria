@@ -2,7 +2,6 @@
 
 (function () {
   var autosaveEl = document.getElementById("autosave");
-  var httpsOnlyEl = document.getElementById("https-only");
   var blocklistEl = document.getElementById("blocklist");
   var saveBtn = document.getElementById("save-btn");
   var pingBtn = document.getElementById("ping-btn");
@@ -10,13 +9,10 @@
 
   // Load saved settings
   browser.storage.local.get(
-    ["options-autosave", "options-https-only", "options-blocklist"],
+    ["options-autosave", "options-blocklist"],
     function (result) {
       if (result["options-autosave"] !== undefined) {
         autosaveEl.checked = result["options-autosave"];
-      }
-      if (result["options-https-only"] !== undefined) {
-        httpsOnlyEl.checked = result["options-https-only"];
       }
       if (result["options-blocklist"]) {
         blocklistEl.value = result["options-blocklist"].join("\n");
@@ -32,7 +28,6 @@
 
     browser.storage.local.set({
       "options-autosave": autosaveEl.checked,
-      "options-https-only": httpsOnlyEl.checked,
       "options-blocklist": blocklist,
     });
 
