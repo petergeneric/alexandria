@@ -59,9 +59,6 @@ struct SearchView: View {
                     Text("Search your browsing history")
                         .foregroundColor(.secondary)
                         .font(.body)
-                    Text("⌘⇧Space to open from anywhere")
-                        .foregroundColor(.gray)
-                        .font(.caption)
                 }
                 Spacer()
             } else {

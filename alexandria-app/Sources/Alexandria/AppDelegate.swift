@@ -5,7 +5,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var searchPanel: SearchPanel?
     private var settingsWindow: NSWindow?
-    private var globalMonitor: Any?
+
     private var ingester: Ingester?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -37,25 +37,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ingester?.ingestIfNeeded()
         }
 
-        // Global hotkey: Cmd+Shift+Space
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 49 {
-                DispatchQueue.main.async {
-                    self?.showSearchPanel()
-                }
-            }
-        }
-
-        // Local monitor for when the app is focused
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 49 {
-                DispatchQueue.main.async {
-                    self?.showSearchPanel()
-                }
-                return nil
-            }
-            return event
-        }
     }
 
     @objc private func statusItemClicked() {
@@ -94,9 +75,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Alexandria", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Alexandria", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         // Clear menu so left-click goes back to action-based handling
@@ -123,8 +104,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if let monitor = globalMonitor {
-            NSEvent.removeMonitor(monitor)
-        }
     }
 }
