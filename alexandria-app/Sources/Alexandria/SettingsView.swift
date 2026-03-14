@@ -8,10 +8,7 @@ struct SettingsView: View {
     @State private var showReindexConfirm = false
     @State private var isReindexing = false
 
-    private let engine: SearchEngineWrapper? = {
-        let path = SearchViewModel.resolveIndexPath()
-        return SearchEngineWrapper(indexPath: path)
-    }()
+    let engine: SearchEngineWrapper?
 
     var body: some View {
         Form {

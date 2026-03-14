@@ -132,20 +132,6 @@ impl AlexandriaEngine {
     }
 
     pub fn reindex(&self, store_path: String) -> Result<u64, AlexandriaError> {
-        // Clear the Tantivy index
-        let mut writer: tantivy::IndexWriter<tantivy::TantivyDocument> = self
-            .index
-            .writer(50_000_000)
-            .map_err(|e| AlexandriaError::IngestFailed {
-                reason: e.to_string(),
-            })?;
-        writer.delete_all_documents().map_err(|e| AlexandriaError::IngestFailed {
-            reason: e.to_string(),
-        })?;
-        writer.commit().map_err(|e| AlexandriaError::IngestFailed {
-            reason: e.to_string(),
-        })?;
-
         // Reset all pages in SQLite to pending
         if store_path.is_empty() {
             return Ok(0);
@@ -158,14 +144,68 @@ impl AlexandriaEngine {
             reason: e.to_string(),
         })?;
 
-        // Re-ingest everything in batches
+        // Clear the Tantivy index and re-ingest using a single writer
+        let fields = SchemaFields::from_index(&self.index).map_err(|e| {
+            AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            }
+        })?;
+        let mut writer = self
+            .index
+            .writer(50_000_000)
+            .map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        writer.delete_all_documents().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+        writer.commit().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
+        // Re-ingest everything in batches using the same writer
         let mut total = 0u64;
         loop {
-            let batch = self.ingest_from_store(store_path.clone())?;
-            if batch == 0 {
+            let pages = store.pending(500).map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+            if pages.is_empty() {
                 break;
             }
-            total += batch;
+
+            let snapshots: Vec<PageSnapshot> = pages
+                .iter()
+                .map(|p| {
+                    let filtered_html = filter::filter_html(&p.html, &p.domain);
+                    let content = extract::html_to_plaintext(&filtered_html);
+                    let captured_at =
+                        chrono::DateTime::from_timestamp(p.captured_at, 0).unwrap_or_else(chrono::Utc::now);
+                    PageSnapshot {
+                        url: p.url.clone(),
+                        title: p.title.clone(),
+                        content,
+                        domain: p.domain.clone(),
+                        source_hash: p.source_hash.clone(),
+                        captured_at,
+                    }
+                })
+                .collect();
+
+            let hashes: Vec<&str> = pages.iter().map(|p| p.source_hash.as_str()).collect();
+            let indexed =
+                index_snapshots(&mut writer, &fields, &self.index, snapshots).map_err(|e| {
+                    AlexandriaError::IngestFailed {
+                        reason: e.to_string(),
+                    }
+                })?;
+
+            store
+                .mark_indexed_batch(&hashes)
+                .map_err(|e| AlexandriaError::IngestFailed {
+                    reason: e.to_string(),
+                })?;
+
+            total += indexed as u64;
         }
         Ok(total)
     }

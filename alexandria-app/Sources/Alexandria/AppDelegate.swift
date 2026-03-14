@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
 
     private var ingester: Ingester?
+    private var engine: SearchEngineWrapper?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon — menu bar only
@@ -29,9 +30,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Install/update native messaging host manifests
         NativeHostInstaller.installManifests()
 
-        // Set up background ingester
+        // Set up shared engine and background ingester
         let indexPath = SearchViewModel.resolveIndexPath()
-        if let engine = SearchEngineWrapper(indexPath: indexPath) {
+        engine = SearchEngineWrapper(indexPath: indexPath)
+        if let engine = engine {
             ingester = Ingester(engine: engine)
             // Ingest on launch
             ingester?.ingestIfNeeded()
@@ -86,7 +88,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let hostingView = NSHostingView(rootView: SettingsView())
+            let hostingView = NSHostingView(rootView: SettingsView(engine: engine))
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 480, height: 220),
                 styleMask: [.titled, .closable],
