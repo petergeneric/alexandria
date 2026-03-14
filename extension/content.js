@@ -87,15 +87,29 @@
     return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
   }
 
-  // Auto-save on page load if enabled
-  function tryAutoSave() {
-    if (AlexRules.isSpecialPage(location.href)) return;
-    if (AlexRules.shouldSkipMime(document.contentType)) return;
+  // --- Auto-save with engagement gating ---
+
+  function getResponseStatus() {
+    try {
+      var nav = performance.getEntriesByType("navigation");
+      if (nav.length > 0 && nav[0].responseStatus !== undefined) {
+        return nav[0].responseStatus;
+      }
+    } catch (e) {}
+    // API unavailable — assume 200 so we don't block on older browsers
+    return 200;
+  }
+
+  var saved = false;
+
+  function doAutoSave() {
+    if (saved) return;
+    saved = true;
+    teardownEngagement();
 
     browser.storage.local.get(
       ["options-autosave", "options-blocklist"],
       function (result) {
-        // Default: autosave on
         var autosave =
           result["options-autosave"] === undefined
             ? true
@@ -111,10 +125,66 @@
     );
   }
 
-  // Run auto-save after the page is fully loaded
+  // Engagement tracking: user must interact or stay focused for >5 seconds
+  var focusTimer = null;
+  var FOCUS_DELAY = 5000;
+
+  function onInteraction() {
+    doAutoSave();
+  }
+
+  function onFocus() {
+    if (focusTimer) return;
+    focusTimer = setTimeout(doAutoSave, FOCUS_DELAY);
+  }
+
+  function onBlur() {
+    if (focusTimer) {
+      clearTimeout(focusTimer);
+      focusTimer = null;
+    }
+  }
+
+  var INTERACTION_EVENTS = ["click", "scroll", "keydown"];
+
+  function setupEngagement() {
+    for (var i = 0; i < INTERACTION_EVENTS.length; i++) {
+      window.addEventListener(INTERACTION_EVENTS[i], onInteraction, {
+        once: true,
+        passive: true,
+      });
+    }
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("blur", onBlur);
+    // Start focus timer immediately if page already has focus
+    if (document.hasFocus()) {
+      onFocus();
+    }
+  }
+
+  function teardownEngagement() {
+    for (var i = 0; i < INTERACTION_EVENTS.length; i++) {
+      window.removeEventListener(INTERACTION_EVENTS[i], onInteraction);
+    }
+    window.removeEventListener("focus", onFocus);
+    window.removeEventListener("blur", onBlur);
+    if (focusTimer) {
+      clearTimeout(focusTimer);
+      focusTimer = null;
+    }
+  }
+
+  function initAutoSave() {
+    if (AlexRules.isSpecialPage(location.href)) return;
+    if (AlexRules.shouldSkipMime(document.contentType)) return;
+    if (getResponseStatus() !== 200) return;
+
+    setupEngagement();
+  }
+
   if (document.readyState === "complete") {
-    tryAutoSave();
+    initAutoSave();
   } else {
-    window.addEventListener("load", tryAutoSave);
+    window.addEventListener("load", initAutoSave);
   }
 })();
