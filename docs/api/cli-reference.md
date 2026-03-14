@@ -60,13 +60,13 @@ alex search [OPTIONS] <QUERY>
 | `QUERY` | Search query (required) | |
 | `-l, --limit` | Maximum results | 10 |
 | `-o, --offset` | Result offset for pagination | 0 |
-| `--raw` | Show full stored markdown instead of snippet | off |
+| `--raw` | Show full stored HTML instead of snippet | off |
 
-**Output** (default): One result per block with title, URL, domain, score, and KWIC snippet with keyword highlighting (ANSI bold yellow).
+**Output** (default): One result per block with title, URL, domain, relative time, score, and KWIC snippet with keyword highlighting (ANSI bold yellow).
 
-**Output** (`--raw`): Full stored markdown content per result instead of snippet.
+**Output** (`--raw`): Full stored HTML content per result instead of snippet.
 
-**Output** (`--json`): JSON array of `SearchResult` objects (includes both `content_snippet` and `markdown` fields).
+**Output** (`--json`): JSON array of `SearchResult` objects (includes both `content_snippet` and `html` fields).
 
 **Exit codes**: 0 = success (even if no results), 1 = error (index not found, query parse failure)
 

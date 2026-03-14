@@ -44,17 +44,17 @@ Files are paired by their MD5 hash. Both the `-m-` (metadata) and `-c-` (content
 | `url` | STRING | yes | yes | Original page URL |
 | `title` | TEXT | yes | yes | Extracted from `<title>` tag |
 | `content` | TEXT | yes | **no** | Plaintext (markdown stripped), for search only |
-| `markdown` | TEXT | no | yes | Full markdown, for snippet generation and rendering |
+| `html` | TEXT | no | yes | Raw HTML, for snippet generation and rendering |
 | `domain` | STRING | yes | yes | Extracted from URL |
-| `indexed_at` | DATE | yes | yes | Timestamp when indexed |
+| `visited_at` | DATE | yes | yes | Timestamp when page was captured |
 | `source_hash` | STRING | yes | yes | MD5 from Recoll filename, used for dedup |
 
 ### Field Design Rationale
 
-- **Plaintext indexed, markdown stored**: Indexing plaintext avoids polluting the search index with markdown syntax (`#`, `[]()`, `|`). Storing markdown preserves the richer format for snippet generation and future rendering (e.g. in a macOS app).
+- **Plaintext indexed, raw HTML stored**: Indexing plaintext avoids polluting the search index with HTML markup. Storing raw HTML preserves the original page for snippet generation and future rendering (e.g. in the macOS app).
 - **STRING** fields are indexed as single tokens (exact match). Used for URLs, domains, and hashes.
 - **TEXT** fields are tokenized and analyzed. Used for title and content (full-text search).
-- Snippets are generated at search time by converting stored markdown to plaintext, then extracting a keyword-in-context window.
+- Snippets are generated at search time by converting stored HTML to plaintext (via HTML→Markdown→plaintext pipeline), then extracting a keyword-in-context window.
 
 ## Deduplication Strategy
 
@@ -68,7 +68,7 @@ This prevents re-indexing the same webcache file on subsequent scans.
 
 ### Incremental Indexing
 
-The `index` command also uses a `.last-indexed` timestamp file in the index directory. Files with modification times older than this marker are skipped entirely, avoiding unnecessary HTML parsing and markdown conversion.
+The `index` command also uses a `.last-indexed` timestamp file in the index directory. Files with modification times older than this marker are skipped entirely, avoiding unnecessary HTML parsing and conversion.
 
 ## PageSnapshot Struct
 
@@ -79,7 +79,7 @@ pub struct PageSnapshot {
     pub url: String,
     pub title: String,
     pub content: String,     // plaintext for indexing
-    pub markdown: String,    // markdown for storage
+    pub html: String,        // raw HTML for storage
     pub domain: String,
     pub source_hash: String, // MD5 from filename
     pub captured_at: DateTime<Utc>,

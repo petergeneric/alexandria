@@ -16,9 +16,11 @@ cargo build --workspace
 ## Architecture
 
 - **HTML → Plaintext**: `htmd` (HTML→Markdown) then `markdown_to_text` (Markdown→plaintext), used for search indexing and snippet generation
+- **HTML filtering**: Site-specific CSS selectors (`scraper`) strip boilerplate (HN, Reddit, Bluesky) before text extraction
 - **Search index**: Tantivy — plaintext is indexed, raw HTML is stored
 - **Title extraction**: Simple `<title>` tag parser (no external dependency)
 - **Snippets**: KWIC (keyword-in-context) generated at search time from stored HTML → plaintext conversion
+- **FFI**: UniFFI proc-macros generate Swift bindings for the macOS app
 
 ## Key Design Decisions
 
@@ -29,8 +31,10 @@ cargo build --workspace
 
 ## Workspace Layout
 
-- `crates/alexandria-core/` — library: extract, ingest, index, search modules
+- `crates/alexandria-core/` — library: extract, ingest, index, search, filter, queue, power, ffi modules
 - `crates/alexandria-cli/` — CLI binary (`alex`) with clap subcommands
+- `alexandria-app/` — Swift macOS native app (SwiftUI + UniFFI bindings)
+- `extension/` — Firefox extension (not yet implemented)
 - `docs/` — architecture and API documentation
 
 ## Dependencies
@@ -38,9 +42,14 @@ cargo build --workspace
 - `htmd` — HTML to Markdown (intermediate step for plaintext extraction)
 - `markdown_to_text` — Markdown to plaintext (final step for plaintext extraction)
 - `tantivy` — full-text search engine
+- `scraper` — HTML parsing for site-specific content filtering
+- `uniffi` — Rust-to-Swift FFI binding generator
+- `notify` — cross-platform filesystem watching
+- `crossbeam-channel` — bounded channel for ingestion queue
 - `clap` — CLI argument parsing
 - `dirs` — home directory expansion
-- `chrono`, `url`, `serde`, `tracing` — utilities
+- `md-5` — MD5 hashing for source deduplication
+- `chrono`, `url`, `serde`, `serde_json`, `tracing`, `thiserror` — utilities
 
 ## License
 

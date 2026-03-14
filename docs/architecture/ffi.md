@@ -25,6 +25,35 @@ impl AlexandriaEngine {
 
     // Ingest new pages from a Recoll webcache directory
     pub fn ingest(&self, source_dir: String) -> Result<u64, AlexandriaError>;
+
+    // Return the number of documents in the index
+    pub fn doc_count(&self) -> Result<u64, AlexandriaError>;
+
+    // Delete all documents from the index
+    pub fn clear_index(&self) -> Result<(), AlexandriaError>;
+}
+```
+
+### AlexandriaSearchResult
+
+```rust
+pub struct AlexandriaSearchResult {
+    pub url: String,
+    pub title: String,
+    pub content_snippet: String,
+    pub domain: String,
+    pub score: f32,
+    pub visited_at_secs: Option<i64>,  // Unix timestamp for Swift interop
+}
+```
+
+### AlexandriaError
+
+```rust
+pub enum AlexandriaError {
+    IndexOpen,
+    SearchFailed,
+    IngestFailed,
 }
 ```
 

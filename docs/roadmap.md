@@ -13,14 +13,15 @@ Minimal viable tool: ingest webcache files and search them.
 
 - HTML to Markdown conversion via `htmd` (skipping script/style/nav, stripping bold/italic)
 - Markdown to plaintext via `markdown_to_text` for search indexing
+- Site-specific HTML filtering via `scraper` (Hacker News, Reddit, Bluesky)
 - Fixed Recoll metadata parser (positional line-based format, not key-value)
-- Tantivy indexing: plaintext indexed for search, markdown stored for display
+- Tantivy indexing: plaintext indexed for search, raw HTML stored for retrieval
 - Deduplication via `source_hash` field
-- KWIC snippet generation at search time (centered on keyword matches)
+- KWIC snippet generation at search time (HTML -> plaintext -> centered on keyword matches)
 - ANSI keyword highlighting in terminal output
 - Incremental indexing via `.last-indexed` timestamp file
 - CLI commands: `index`, `reindex`, `search`
-- Search flags: `--limit`, `--offset`, `--raw` (full markdown), `--json`
+- Search flags: `--limit`, `--offset`, `--raw` (full HTML), `--json`
 - Default index location: `./alexandria_index/`
 
 ## Phase 2: Watch & Queue
@@ -35,12 +36,15 @@ Minimal viable tool: ingest webcache files and search them.
 - Queue consumer pause/resume
 - Power state change notifications
 
-## Phase 4: macOS App
+## Phase 4: macOS App (done)
 
-- Swift UI for search interface
-- C FFI layer via cbindgen
-- Static library linking in Xcode
-- Basic search results display with URL, title, snippet
+- SwiftUI app for search interface
+- UniFFI bindings for Rust-to-Swift communication
+- Static library linking via Swift Package Manager
+- Search results display with URL, title, snippet, domain, relative time
+- Faceting sidebar with date range and domain filters
+- Settings view for index path configuration
+- Ingestion support from within the app
 
 ## Phase 5: Browser Extension
 

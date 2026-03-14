@@ -16,7 +16,7 @@ Queries are parsed by Tantivy's `QueryParser` across three fields:
 | `domain` | 2.0x | Domain matches indicate topical relevance |
 | `content` | 1.0x | Full-text body match (baseline) |
 
-The `content` field contains plaintext (markdown stripped), so search terms match against clean text without markdown syntax noise.
+The `content` field contains plaintext (HTML markup stripped via the HTML→Markdown→plaintext pipeline), so search terms match against clean text.
 
 ### Query Syntax
 
@@ -34,9 +34,10 @@ pub struct SearchResult {
     pub url: String,
     pub title: String,
     pub content_snippet: String,  // KWIC plaintext snippet
-    pub markdown: String,         // full stored markdown
+    pub html: String,             // full stored raw HTML
     pub domain: String,
     pub score: f32,
+    pub visited_at: Option<DateTime<Utc>>,
 }
 ```
 
@@ -46,12 +47,13 @@ Results are returned sorted by relevance score (descending).
 
 Snippets are generated at search time using keyword-in-context (KWIC) extraction:
 
-1. Read stored markdown from the index
-2. Convert to plaintext via `markdown_to_text`
-3. Find the earliest query keyword match in the plaintext
-4. Extract a ~200 character window centered on the match, snapping to word boundaries
-5. Add `...` ellipsis when the snippet doesn't start/end at the text boundary
-6. If no keyword found in text, fall back to showing the beginning
+1. Read stored raw HTML from the index
+2. Filter HTML through site-specific selectors
+3. Convert to plaintext via HTML→Markdown→plaintext pipeline
+4. Find the earliest query keyword match in the plaintext
+5. Extract a ~200 character window centered on the match, snapping to word boundaries
+6. Add `...` ellipsis when the snippet doesn't start/end at the text boundary
+7. If no keyword found in text, fall back to showing the beginning
 
 ### Keyword Highlighting
 
@@ -59,7 +61,7 @@ The CLI highlights matched keywords in titles and snippets using ANSI bold yello
 
 ## Raw Output
 
-The `--raw` flag outputs the full stored markdown instead of a KWIC snippet, useful for inspecting the complete converted content.
+The `--raw` flag outputs the full stored HTML instead of a KWIC snippet, useful for inspecting the original page content.
 
 ## Pagination
 

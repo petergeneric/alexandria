@@ -3,8 +3,8 @@
 ## Prerequisites
 
 - Rust 1.75+ (install via [rustup](https://rustup.rs/))
-- macOS 13+ (for Swift app, future)
-- Xcode 15+ (for Swift app, future)
+- macOS 13+ (for Swift app)
+- Xcode 15+ (for Swift app)
 
 ## Build
 
@@ -44,7 +44,7 @@ cargo run -p alexandria-cli -- search "rust error handling"
 # Search with JSON output
 cargo run -p alexandria-cli -- --json search "rust" --limit 5
 
-# Search with full markdown output
+# Search with full HTML output
 cargo run -p alexandria-cli -- search "rust" --raw
 
 # Paginate results
@@ -63,18 +63,19 @@ alexandria/
       src/
         lib.rs                # Module declarations
         ingest.rs             # IngestSource trait + RecollFileSource
-        extract.rs            # HTML→Markdown→plaintext extraction
+        extract.rs            # HTML->Markdown->plaintext extraction
+        filter.rs             # Site-specific HTML filtering
         index.rs              # Tantivy schema and indexing
         search.rs             # Search engine with KWIC snippets
-        queue.rs              # Bounded channel queue (Phase 2)
-        power.rs              # Low Power Mode detection (Phase 3)
-        ffi.rs                # C FFI (future)
+        queue.rs              # Bounded channel queue
+        power.rs              # Low Power Mode detection
+        ffi.rs                # UniFFI bindings for Swift
     alexandria-cli/
       Cargo.toml
       src/
         main.rs               # CLI: index, reindex, search commands
-  alexandria-app/                # Swift macOS app (future)
-  extension/                  # Firefox extension (future)
+  alexandria-app/             # Swift macOS app (SwiftUI + UniFFI)
+  extension/                  # Firefox extension (not yet implemented)
   docs/
     architecture/             # Design documents
     api/                      # API reference
@@ -88,6 +89,8 @@ alexandria/
 | `htmd` | HTML to Markdown conversion |
 | `markdown_to_text` | Markdown to plaintext stripping |
 | `tantivy` | Full-text search engine |
+| `scraper` | HTML parsing for site-specific filtering |
+| `uniffi` | Rust-to-Swift FFI binding generator |
 | `clap` | CLI argument parsing |
 | `dirs` | Home directory expansion for `~` paths |
 

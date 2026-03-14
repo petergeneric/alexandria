@@ -7,9 +7,18 @@
 ```rust
 pub fn html_to_markdown(html: &str) -> String;
 pub fn markdown_to_plaintext(md: &str) -> String;
+pub fn html_to_plaintext(html: &str) -> String;
 pub fn extract_title(html: &str) -> String;
 pub fn extract_domain(url: &str) -> String;
 ```
+
+### `filter` module
+
+```rust
+pub fn filter_html(html: &str, url: &str) -> String;
+```
+
+Site-specific HTML filtering using CSS selectors. Strips boilerplate elements (navigation, ads, sidebars) for known sites including Hacker News, Reddit, and Bluesky.
 
 ### `ingest` module
 
@@ -22,7 +31,7 @@ pub struct PageSnapshot {
     pub url: String,
     pub title: String,
     pub content: String,       // plaintext for indexing
-    pub markdown: String,      // markdown for storage
+    pub html: String,          // raw HTML for storage
     pub domain: String,
     pub source_hash: String,
     pub captured_at: DateTime<Utc>,
@@ -49,7 +58,7 @@ impl IngestSource for RecollFileSource { .. }
 ```rust
 pub enum IndexError { Tantivy, Io }
 
-pub struct SchemaFields { pub url, title, content, markdown, domain, indexed_at, source_hash: Field }
+pub struct SchemaFields { pub url, title, content, html, domain, visited_at, source_hash: Field }
 
 pub fn build_schema() -> (Schema, SchemaFields);
 pub fn open_or_create_index(index_dir: &Path) -> Result<Index, IndexError>;
@@ -66,9 +75,10 @@ pub struct SearchResult {
     pub url: String,
     pub title: String,
     pub content_snippet: String,  // KWIC plaintext snippet
-    pub markdown: String,         // full stored markdown
+    pub html: String,             // full stored raw HTML
     pub domain: String,
     pub score: f32,
+    pub visited_at: Option<DateTime<Utc>>,
 }
 
 pub struct SearchEngine { .. }
@@ -78,7 +88,7 @@ impl SearchEngine {
 }
 ```
 
-### `queue` module (Phase 2)
+### `queue` module
 
 ```rust
 pub struct IngestQueue { .. }
@@ -90,7 +100,7 @@ impl IngestQueue {
 }
 ```
 
-### `power` module (Phase 3)
+### `power` module
 
 ```rust
 pub fn is_low_power_mode() -> bool;
@@ -98,4 +108,27 @@ pub fn is_low_power_mode() -> bool;
 
 ### `ffi` module
 
-See [FFI Architecture](../architecture/ffi.md) for the planned C API surface.
+UniFFI-based Swift bindings. See [FFI Architecture](../architecture/ffi.md).
+
+```rust
+pub struct AlexandriaEngine { .. }
+impl AlexandriaEngine {
+    pub fn open(index_path: String) -> Result<Arc<Self>, AlexandriaError>;
+    pub fn search(&self, query: String, limit: u32, offset: u32)
+        -> Result<Vec<AlexandriaSearchResult>, AlexandriaError>;
+    pub fn ingest(&self, source_dir: String) -> Result<u64, AlexandriaError>;
+    pub fn doc_count(&self) -> Result<u64, AlexandriaError>;
+    pub fn clear_index(&self) -> Result<(), AlexandriaError>;
+}
+
+pub struct AlexandriaSearchResult {
+    pub url: String,
+    pub title: String,
+    pub content_snippet: String,
+    pub domain: String,
+    pub score: f32,
+    pub visited_at_secs: Option<i64>,
+}
+
+pub enum AlexandriaError { IndexOpen, SearchFailed, IngestFailed }
+```
