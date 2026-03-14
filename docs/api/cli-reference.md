@@ -10,42 +10,21 @@ alex [OPTIONS] <COMMAND>
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--index-dir <PATH>` | Path to the Tantivy index directory | `./alexandria_index` |
+| `--index-dir <PATH>` | Path to the index directory | auto-detected (see below) |
 | `--json` | Output results as JSON | off |
 | `--help` | Show help | |
 | `--version` | Show version | |
 
+### Index Discovery
+
+If `--index-dir` is not provided, the CLI searches for an existing index (identified by a `meta.json` file) in this order:
+
+1. Current working directory
+2. `~/Library/Application Support/works.peter.alexandria/index`
+
+If no index is found, the CLI exits with an error listing the locations it checked and a hint to use `--index-dir`.
+
 ## Commands
-
-### `index`
-
-Index new pages from a Recoll webcache directory. Skips files already processed (tracked via `.last-indexed` timestamp in the index directory). Also skips documents already in the index by `source_hash`.
-
-```
-alex index [SOURCE]
-```
-
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `SOURCE` | Path to the webcache directory | `~/Downloads/webcache` |
-
-**Exit codes**: 0 = success, 1 = error (source not found, index write failure)
-
-### `reindex`
-
-Delete the existing index and rebuild from scratch.
-
-```
-alex reindex [SOURCE]
-```
-
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `SOURCE` | Path to the webcache directory | `~/Downloads/webcache` |
-
-Removes the entire index directory (including `.last-indexed`), then performs a full index.
-
-**Exit codes**: 0 = success, 1 = error
 
 ### `search`
 
@@ -70,16 +49,3 @@ alex search [OPTIONS] <QUERY>
 
 **Exit codes**: 0 = success (even if no results), 1 = error (index not found, query parse failure)
 
-### `watch` (Phase 2)
-
-Watch a directory for new webcache files and index them continuously.
-
-```
-alex watch [SOURCE]
-```
-
-Performs a bulk scan on startup, then watches for new files. Respects Low Power Mode.
-
-### `info` (Phase 2)
-
-Show index statistics (document count, index size, index directory path).

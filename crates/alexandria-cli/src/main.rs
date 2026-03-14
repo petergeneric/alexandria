@@ -1,10 +1,8 @@
 use chrono::{DateTime, Datelike, Local, Utc};
 use clap::{Parser, Subcommand};
-use alexandria_core::index::{build_schema, index_snapshots, open_or_create_index};
-use alexandria_core::ingest::{IngestSource, RecollFileSource};
+use alexandria_core::index::open_or_create_index;
 use alexandria_core::search::SearchEngine;
-use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "alex")]
@@ -12,8 +10,8 @@ use std::time::SystemTime;
 #[command(version)]
 struct Cli {
     /// Path to the index directory
-    #[arg(long, default_value = "./alexandria_index")]
-    index_dir: String,
+    #[arg(long)]
+    index_dir: Option<String>,
 
     /// Output results as JSON
     #[arg(long, global = true)]
@@ -25,18 +23,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Index pages from a webcache directory
-    Index {
-        /// Path to the Recoll webcache directory
-        #[arg(default_value = "~/Downloads/webcache")]
-        source: String,
-    },
-    /// Delete existing index and rebuild from scratch
-    Reindex {
-        /// Path to the Recoll webcache directory
-        #[arg(default_value = "~/Downloads/webcache")]
-        source: String,
-    },
     /// Search indexed pages
     Search {
         /// Search query
@@ -63,6 +49,50 @@ fn expand_tilde(path: &str) -> PathBuf {
         }
     }
     PathBuf::from(path)
+}
+
+fn is_index_dir(path: &PathBuf) -> bool {
+    path.join("meta.json").exists()
+}
+
+fn resolve_index_path(explicit: Option<&str>) -> PathBuf {
+    // 1. Explicit --index-path flag
+    if let Some(p) = explicit {
+        let path = expand_tilde(p);
+        if !is_index_dir(&path) {
+            eprintln!("Error: no Alexandria index found at {}", path.display());
+            std::process::exit(1);
+        }
+        return path;
+    }
+
+    // 2. Current working directory
+    let cwd = std::env::current_dir().unwrap_or_default();
+    if is_index_dir(&cwd) {
+        return cwd;
+    }
+
+    // 3. macOS app default location
+    if let Some(home) = dirs::home_dir() {
+        let app_index = home
+            .join("Library/Application Support/works.peter.alexandria/index");
+        if is_index_dir(&app_index) {
+            return app_index;
+        }
+    }
+
+    eprintln!("Error: no Alexandria index found. Searched:");
+    eprintln!("  - current directory: {}", cwd.display());
+    if let Some(home) = dirs::home_dir() {
+        eprintln!(
+            "  - {}",
+            home.join("Library/Application Support/works.peter.alexandria/index")
+                .display()
+        );
+    }
+    eprintln!();
+    eprintln!("Use --index-dir to specify the index location.");
+    std::process::exit(1);
 }
 
 fn highlight_keywords(text: &str, query: &str) -> String {
@@ -162,70 +192,6 @@ fn format_relative_time(dt: &DateTime<Utc>) -> String {
     local_dt.format("%-d %b %Y").to_string()
 }
 
-fn read_last_indexed(index_path: &Path) -> Option<SystemTime> {
-    let marker = index_path.join(".last-indexed");
-    marker.metadata().ok()?.modified().ok()
-}
-
-fn write_last_indexed(index_path: &Path) {
-    let marker = index_path.join(".last-indexed");
-    if marker.exists() {
-        // Update mtime by writing to it
-        let _ = std::fs::write(&marker, "");
-    } else {
-        let _ = std::fs::create_dir_all(index_path);
-        let _ = std::fs::write(&marker, "");
-    }
-}
-
-fn run_index(source: &str, index_path: &PathBuf) {
-    let source_path = expand_tilde(source);
-    if !source_path.is_dir() {
-        eprintln!("Error: source directory does not exist: {}", source_path.display());
-        std::process::exit(1);
-    }
-
-    let mut file_source = RecollFileSource::new(&source_path);
-    file_source.modified_since = read_last_indexed(index_path);
-
-    let snapshots = match file_source.scan() {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Error scanning webcache: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    let index = match open_or_create_index(index_path) {
-        Ok(i) => i,
-        Err(e) => {
-            eprintln!("Error opening index: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    let (_schema, fields) = build_schema();
-    let mut writer = match index.writer(50_000_000) {
-        Ok(w) => w,
-        Err(e) => {
-            eprintln!("Error creating index writer: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    let count = snapshots.len();
-    match index_snapshots(&mut writer, &fields, &index, snapshots) {
-        Ok(indexed) => {
-            write_last_indexed(index_path);
-            println!("Scanned {count} files, indexed {indexed} new documents");
-        }
-        Err(e) => {
-            eprintln!("Error indexing: {e}");
-            std::process::exit(1);
-        }
-    }
-}
-
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -235,22 +201,9 @@ fn main() {
         .init();
 
     let cli = Cli::parse();
-    let index_path = expand_tilde(&cli.index_dir);
+    let index_path = resolve_index_path(cli.index_dir.as_deref());
 
     match cli.command {
-        Commands::Index { source } => {
-            run_index(&source, &index_path);
-        }
-        Commands::Reindex { source } => {
-            if index_path.exists() {
-                if let Err(e) = std::fs::remove_dir_all(&index_path) {
-                    eprintln!("Error removing old index: {e}");
-                    std::process::exit(1);
-                }
-                println!("Removed old index at {}", index_path.display());
-            }
-            run_index(&source, &index_path);
-        }
         Commands::Search { query, limit, offset, raw } => {
             let index = match open_or_create_index(&index_path) {
                 Ok(i) => i,

@@ -8,9 +8,7 @@ A tool that produces a fulltext index of every page you read on your browser.
 
 ```bash
 cargo build --workspace
-./target/debug/alex index ~/Downloads/webcache
 ./target/debug/alex search "query"
-./target/debug/alex reindex ~/Downloads/webcache
 ```
 
 ## Architecture
@@ -26,7 +24,6 @@ cargo build --workspace
 
 - Index plaintext, store raw HTML: better search relevance + original page preserved
 - `.last-indexed` timestamp file in index dir for incremental indexing
-- `reindex` deletes index dir (and `.last-indexed`) before rebuilding
 - Supporting ingesting Recoll webcache folders. Recoll metadata files use positional line format (line 0: URL, line 2: MIME type), not key-value
 
 ## Workspace Layout
