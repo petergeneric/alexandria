@@ -4,8 +4,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::index::{build_schema, index_snapshots, open_or_create_index};
-use crate::ingest::{IngestSource, RecollFileSource};
+use crate::ingest::{IngestSource, PageSnapshot, RecollFileSource};
+use crate::page_store::PageStore;
 use crate::search::SearchEngine;
+use crate::{extract, filter};
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum AlexandriaError {
@@ -105,6 +107,65 @@ impl AlexandriaEngine {
         let _ = std::fs::remove_file(&marker);
 
         Ok(())
+    }
+
+    pub fn ingest_from_store(&self, store_path: String) -> Result<u64, AlexandriaError> {
+        let store =
+            PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+
+        let pages = store.pending(500).map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
+        if pages.is_empty() {
+            return Ok(0);
+        }
+
+        let snapshots: Vec<PageSnapshot> = pages
+            .iter()
+            .map(|p| {
+                let filtered_html = filter::filter_html(&p.html, &p.domain);
+                let content = extract::html_to_plaintext(&filtered_html);
+                let captured_at =
+                    chrono::DateTime::from_timestamp(p.captured_at, 0).unwrap_or_else(chrono::Utc::now);
+                PageSnapshot {
+                    url: p.url.clone(),
+                    title: p.title.clone(),
+                    content,
+                    html: p.html.clone(),
+                    domain: p.domain.clone(),
+                    source_hash: p.source_hash.clone(),
+                    captured_at,
+                }
+            })
+            .collect();
+
+        let (_schema, fields) = build_schema();
+        let mut writer = self
+            .index
+            .writer(50_000_000)
+            .map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+
+        let hashes: Vec<&str> = pages.iter().map(|p| p.source_hash.as_str()).collect();
+
+        let indexed =
+            index_snapshots(&mut writer, &fields, &self.index, snapshots).map_err(|e| {
+                AlexandriaError::IngestFailed {
+                    reason: e.to_string(),
+                }
+            })?;
+
+        store
+            .mark_indexed_batch(&hashes)
+            .map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+
+        Ok(indexed as u64)
     }
 
     pub fn ingest(&self, source_dir: String) -> Result<u64, AlexandriaError> {

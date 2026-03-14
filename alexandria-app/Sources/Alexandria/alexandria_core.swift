@@ -512,6 +512,8 @@ public protocol AlexandriaEngineProtocol : AnyObject {
     
     func ingest(sourceDir: String) throws  -> UInt64
     
+    func ingestFromStore(storePath: String) throws  -> UInt64
+    
     func search(query: String, limit: UInt32, offset: UInt32) throws  -> [AlexandriaSearchResult]
     
 }
@@ -591,6 +593,14 @@ open func ingest(sourceDir: String)throws  -> UInt64 {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
     uniffi_alexandria_core_fn_method_alexandriaengine_ingest(self.uniffiClonePointer(),
         FfiConverterString.lower(sourceDir),$0
+    )
+})
+}
+    
+open func ingestFromStore(storePath: String)throws  -> UInt64 {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_ingest_from_store(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),$0
     )
 })
 }
@@ -903,6 +913,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_ingest() != 43877) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_ingest_from_store() != 48440) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_search() != 43099) {

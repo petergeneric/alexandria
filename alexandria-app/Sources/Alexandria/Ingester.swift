@@ -16,18 +16,32 @@ class Ingester {
         timer?.invalidate()
     }
 
-    /// Run ingestion if a webcache path is configured. Safe to call frequently — skips if already running.
+    /// Run ingestion from all configured sources. Safe to call frequently — skips if already running.
     func ingestIfNeeded() {
-        let path = settings.webcachePath
-        guard !path.isEmpty, !isRunning else { return }
+        guard !isRunning else { return }
 
         isRunning = true
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
-            let count = self.engine.ingest(sourceDir: path)
-            if count > 0 {
-                print("Ingested \(count) new pages from \(path)")
+
+            // Ingest from page store (browser extension captures)
+            let storePath = self.settings.storePath
+            if !storePath.isEmpty {
+                let storeCount = self.engine.ingestFromStore(storePath: storePath)
+                if storeCount > 0 {
+                    print("Ingested \(storeCount) new pages from store")
+                }
             }
+
+            // Ingest from Recoll webcache (legacy)
+            let webcachePath = self.settings.webcachePath
+            if !webcachePath.isEmpty {
+                let count = self.engine.ingest(sourceDir: webcachePath)
+                if count > 0 {
+                    print("Ingested \(count) new pages from \(webcachePath)")
+                }
+            }
+
             self.isRunning = false
         }
     }

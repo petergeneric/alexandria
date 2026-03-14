@@ -27,6 +27,13 @@ class SearchEngineWrapper {
         return Int(count)
     }
 
+    func ingestFromStore(storePath: String) -> Int {
+        guard let count = try? engine.ingestFromStore(storePath: storePath) else {
+            return 0
+        }
+        return Int(count)
+    }
+
     func docCount() -> UInt64 {
         guard let count = try? engine.docCount() else { return 0 }
         return count

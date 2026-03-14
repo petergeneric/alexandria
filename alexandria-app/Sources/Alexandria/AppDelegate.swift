@@ -26,6 +26,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
+        // Install/update native messaging host manifests
+        NativeHostInstaller.installManifests()
+
         // Set up background ingester
         let indexPath = SearchViewModel.resolveIndexPath()
         if let engine = SearchEngineWrapper(indexPath: indexPath) {

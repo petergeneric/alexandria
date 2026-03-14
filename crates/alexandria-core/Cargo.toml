@@ -22,6 +22,8 @@ chrono = { workspace = true }
 url = { workspace = true }
 scraper = { workspace = true }
 uniffi = { workspace = true }
+rusqlite = { workspace = true }
+zstd = { workspace = true }
 
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }

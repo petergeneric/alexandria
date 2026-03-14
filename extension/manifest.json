@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "Alexandria Web Capture",
+  "version": "1.0.0",
+  "description": "Captures web pages and sends them to Alexandria for full-text indexing.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "alexandria@works.peter",
+      "strict_min_version": "109.0"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "contextMenus",
+    "notifications",
+    "storage",
+    "nativeMessaging"
+  ],
+  "background": {
+    "scripts": ["rules.js", "background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*/*"],
+      "js": ["md5.js", "rules.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_title": "Alexandria - Save page for indexing"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+A"
+      },
+      "description": "Save page for indexing"
+    }
+  }
+}

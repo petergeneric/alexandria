@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
-    @State private var showFolderPicker = false
     @State private var pageCount: UInt64 = 0
     @State private var indexSize: String = ""
     @State private var showClearConfirm = false
@@ -16,34 +15,18 @@ struct SettingsView: View {
         Form {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Recoll Webcache Folder")
+                    Text("Browser Extension")
                         .font(.headline)
-                    Text("Pages saved by the Recoll Firefox extension will be automatically indexed.")
+                    Text("Pages captured by the Alexandria browser extension are automatically indexed.")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
                     HStack {
-                        if settings.webcachePath.isEmpty {
-                            Text("Not configured")
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text(settings.webcachePath)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        Spacer()
-                        Button("Choose...") {
-                            showFolderPicker = true
-                        }
-                        if !settings.webcachePath.isEmpty {
-                            Button(role: .destructive) {
-                                settings.webcachePath = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        Text(settings.storePath)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .foregroundColor(.secondary)
+                            .font(.callout)
                     }
                 }
             }
@@ -75,14 +58,6 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 220)
-        .fileImporter(
-            isPresented: $showFolderPicker,
-            allowedContentTypes: [.folder]
-        ) { result in
-            if case .success(let url) = result {
-                settings.webcachePath = url.path
-            }
-        }
         .alert("Clear Index?", isPresented: $showClearConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Clear", role: .destructive) {
