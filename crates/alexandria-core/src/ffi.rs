@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::index::{build_schema, index_snapshots, open_or_create_index};
+use crate::index::{index_snapshots, open_or_create_index, SchemaFields};
 use crate::ingest::{IngestSource, PageSnapshot, RecollFileSource};
 use crate::page_store::PageStore;
 use crate::search::SearchEngine;
@@ -52,7 +52,11 @@ impl AlexandriaEngine {
             }
         })?;
 
-        let engine = SearchEngine::new(index.clone());
+        let engine = SearchEngine::new(index.clone()).map_err(|e| {
+            AlexandriaError::IndexOpen {
+                reason: e.to_string(),
+            }
+        })?;
         Ok(Arc::new(Self {
             engine,
             index,
@@ -65,10 +69,17 @@ impl AlexandriaEngine {
         query: String,
         limit: u32,
         offset: u32,
+        store_path: String,
     ) -> Result<Vec<AlexandriaSearchResult>, AlexandriaError> {
+        let store = if !store_path.is_empty() {
+            PageStore::open(Path::new(&store_path)).ok()
+        } else {
+            None
+        };
+
         let results = self
             .engine
-            .search(&query, limit as usize, offset as usize)
+            .search(&query, limit as usize, offset as usize, store.as_ref())
             .map_err(|e| AlexandriaError::SearchFailed {
                 reason: e.to_string(),
             })?;
@@ -154,7 +165,6 @@ impl AlexandriaEngine {
                     url: p.url.clone(),
                     title: p.title.clone(),
                     content,
-                    html: p.html.clone(),
                     domain: p.domain.clone(),
                     source_hash: p.source_hash.clone(),
                     captured_at,
@@ -162,7 +172,11 @@ impl AlexandriaEngine {
             })
             .collect();
 
-        let (_schema, fields) = build_schema();
+        let fields = SchemaFields::from_index(&self.index).map_err(|e| {
+            AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            }
+        })?;
         let mut writer = self
             .index
             .writer(50_000_000)
@@ -214,7 +228,11 @@ impl AlexandriaEngine {
             return Ok(0);
         }
 
-        let (_schema, fields) = build_schema();
+        let fields = SchemaFields::from_index(&self.index).map_err(|e| {
+            AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            }
+        })?;
         let mut writer = self
             .index
             .writer(50_000_000)

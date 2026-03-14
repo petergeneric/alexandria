@@ -9,7 +9,8 @@ use tantivy::Index;
 use thiserror::Error;
 
 use crate::{extract, filter};
-use crate::index::{build_schema, SchemaFields};
+use crate::index::SchemaFields;
+use crate::page_store::PageStore;
 
 #[derive(Debug, Error)]
 pub enum SearchError {
@@ -17,6 +18,8 @@ pub enum SearchError {
     Tantivy(#[from] tantivy::TantivyError),
     #[error("query parse error: {0}")]
     QueryParse(#[from] tantivy::query::QueryParserError),
+    #[error("index error: {0}")]
+    Index(#[from] crate::index::IndexError),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +27,6 @@ pub struct SearchResult {
     pub url: String,
     pub title: String,
     pub content_snippet: String,
-    pub html: String,
     pub domain: String,
     pub score: f32,
     pub visited_at: Option<DateTime<Utc>>,
@@ -36,12 +38,18 @@ pub struct SearchEngine {
 }
 
 impl SearchEngine {
-    pub fn new(index: Index) -> Self {
-        let (_schema, fields) = build_schema();
-        Self { index, fields }
+    pub fn new(index: Index) -> Result<Self, crate::index::IndexError> {
+        let fields = SchemaFields::from_index(&index)?;
+        Ok(Self { index, fields })
     }
 
-    pub fn search(&self, query_str: &str, limit: usize, offset: usize) -> Result<Vec<SearchResult>, SearchError> {
+    pub fn search(
+        &self,
+        query_str: &str,
+        limit: usize,
+        offset: usize,
+        store: Option<&PageStore>,
+    ) -> Result<Vec<SearchResult>, SearchError> {
         let reader = self.index.reader()?;
         let searcher = reader.searcher();
 
@@ -75,8 +83,8 @@ impl SearchEngine {
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
-            let html = doc
-                .get_first(self.fields.html)
+            let source_hash = doc
+                .get_first(self.fields.source_hash)
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
@@ -87,15 +95,21 @@ impl SearchEngine {
                     DateTime::from_timestamp(dt.into_timestamp_secs(), 0)
                         .unwrap_or_default()
                 });
-            let filtered = filter::filter_html(&html, &domain);
-            let plaintext = extract::html_to_plaintext(&filtered);
-            let content_snippet = kwic_snippet(&plaintext, query_str, 200);
+
+            // Generate snippet from HTML stored in SQLite
+            let content_snippet = store
+                .and_then(|s| s.get_html(&source_hash).ok().flatten())
+                .map(|html| {
+                    let filtered = filter::filter_html(&html, &domain);
+                    let plaintext = extract::html_to_plaintext(&filtered);
+                    kwic_snippet(&plaintext, query_str, 200)
+                })
+                .unwrap_or_default();
 
             results.push(SearchResult {
                 url,
                 title,
                 content_snippet,
-                html,
                 domain,
                 score,
                 visited_at,

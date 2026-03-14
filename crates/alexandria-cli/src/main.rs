@@ -1,6 +1,7 @@
 use chrono::{DateTime, Datelike, Local, Utc};
 use clap::{Parser, Subcommand};
 use alexandria_core::index::open_or_create_index;
+use alexandria_core::page_store::PageStore;
 use alexandria_core::search::SearchEngine;
 use std::path::PathBuf;
 
@@ -36,9 +37,9 @@ enum Commands {
         #[arg(short, long, default_value = "0")]
         offset: usize,
 
-        /// Show full HTML content instead of snippet
+        /// Path to the page store database (for snippets)
         #[arg(long)]
-        raw: bool,
+        store: Option<String>,
     },
 }
 
@@ -204,7 +205,7 @@ fn main() {
     let index_path = resolve_index_path(cli.index_dir.as_deref());
 
     match cli.command {
-        Commands::Search { query, limit, offset, raw } => {
+        Commands::Search { query, limit, offset, store } => {
             let index = match open_or_create_index(&index_path) {
                 Ok(i) => i,
                 Err(e) => {
@@ -213,8 +214,27 @@ fn main() {
                 }
             };
 
-            let engine = SearchEngine::new(index);
-            let results = match engine.search(&query, limit, offset) {
+            let engine = match SearchEngine::new(index) {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("Error initializing search: {e}");
+                    std::process::exit(1);
+                }
+            };
+
+            let store_path = store
+                .map(|s| expand_tilde(&s))
+                .or_else(|| {
+                    dirs::home_dir().map(|h| {
+                        h.join("Library/Application Support/works.peter.alexandria/pages.db")
+                    })
+                });
+            let page_store = store_path
+                .as_ref()
+                .filter(|p| p.exists())
+                .and_then(|p| PageStore::open(p).ok());
+
+            let results = match engine.search(&query, limit, offset, page_store.as_ref()) {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("Error searching: {e}");
@@ -242,9 +262,7 @@ fn main() {
                     if !when.is_empty() {
                         println!("  When:   {}", when);
                     }
-                    if raw {
-                        println!("\n{}\n", result.html);
-                    } else {
+                    if !result.content_snippet.is_empty() {
                         println!("  {}", highlight_keywords(&result.content_snippet, &query));
                     }
                 }

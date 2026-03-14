@@ -52,13 +52,14 @@ class SearchEngineWrapper {
         return true
     }
 
-    func search(query: String, limit: Int = 20, offset: Int = 0) -> [SearchResult] {
+    func search(query: String, limit: Int = 20, offset: Int = 0, storePath: String = "") -> [SearchResult] {
         guard !query.isEmpty else { return [] }
 
         guard let results = try? engine.search(
             query: query,
             limit: UInt32(limit),
-            offset: UInt32(offset)
+            offset: UInt32(offset),
+            storePath: storePath
         ) else {
             return []
         }

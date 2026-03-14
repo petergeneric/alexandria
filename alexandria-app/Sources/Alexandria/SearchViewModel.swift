@@ -121,7 +121,7 @@ class SearchViewModel: ObservableObject {
         let sp = storePath
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let searchResults = engine.search(query: q, limit: 50)
+            let searchResults = engine.search(query: q, limit: 50, storePath: sp)
             let status = engine.pendingStatus(storePath: sp)
             DispatchQueue.main.async {
                 guard let self = self, self.query == q else { return }

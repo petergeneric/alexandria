@@ -113,6 +113,23 @@ impl PageStore {
         Ok((count, oldest))
     }
 
+    /// Look up the raw HTML for a page by its source hash.
+    pub fn get_html(&self, source_hash: &str) -> Result<Option<String>, PageStoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT html FROM pages WHERE source_hash = ?1",
+        )?;
+        let mut rows = stmt.query(params![source_hash])?;
+        match rows.next()? {
+            Some(row) => {
+                let compressed: Vec<u8> = row.get(0)?;
+                let html = zstd::decode_all(compressed.as_slice())
+                    .map_err(|e| PageStoreError::Compression(e.to_string()))?;
+                Ok(Some(String::from_utf8_lossy(&html).into_owned()))
+            }
+            None => Ok(None),
+        }
+    }
+
     pub fn mark_indexed(&self, source_hash: &str) -> Result<(), PageStoreError> {
         let now = chrono::Utc::now().timestamp();
         self.db.execute(

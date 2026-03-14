@@ -22,10 +22,8 @@ pub enum IngestError {
 pub struct PageSnapshot {
     pub url: String,
     pub title: String,
-    /// Plaintext for search indexing (not stored in index)
+    /// Plaintext for search indexing
     pub content: String,
-    /// Raw HTML for storage
-    pub html: String,
     pub domain: String,
     pub source_hash: String,
     pub captured_at: DateTime<Utc>,
@@ -143,7 +141,6 @@ impl IngestSource for RecollFileSource {
                         url: metadata.url,
                         title,
                         content,
-                        html: raw_html,
                         domain,
                         source_hash: hash,
                         captured_at,
