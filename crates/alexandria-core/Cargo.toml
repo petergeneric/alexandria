@@ -5,7 +5,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [lib]
-crate-type = ["lib", "staticlib"]
+crate-type = ["lib", "staticlib", "cdylib"]
 
 [dependencies]
 tantivy = { workspace = true }
@@ -21,9 +21,14 @@ md-5 = { workspace = true }
 chrono = { workspace = true }
 url = { workspace = true }
 scraper = { workspace = true }
+uniffi = { workspace = true }
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
 
 [[example]]
 name = "filter-html"
-
-[build-dependencies]
-cbindgen = "0.27"

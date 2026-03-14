@@ -18,3 +18,4 @@ md-5 = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
 url = "2"
 scraper = "0.25"
+uniffi = { version = "0.28", features = ["cli"] }

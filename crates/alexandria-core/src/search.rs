@@ -98,51 +98,75 @@ impl SearchEngine {
 
 /// Generate a keyword-in-context snippet from `text` centered on the first
 /// occurrence of any query keyword, with up to `max_len` characters.
+///
+/// All offsets are computed as *char* indices and converted to byte boundaries
+/// only via `char_indices`, avoiding panics from slicing mid-codepoint.
 fn kwic_snippet(text: &str, query: &str, max_len: usize) -> String {
-    if text.len() <= max_len {
+    let char_count = text.chars().count();
+    if char_count <= max_len {
         return text.to_string();
     }
 
-    let lower_text = text.to_lowercase();
     let keywords: Vec<String> = query
         .split_whitespace()
         .filter(|w| !matches!(w.to_uppercase().as_str(), "AND" | "OR" | "NOT"))
         .map(|w| w.to_lowercase())
         .collect();
 
-    // Find the earliest keyword match (byte position)
-    let match_pos = keywords
+    // Find earliest keyword match as a *char* index in the original text.
+    let match_char_pos: Option<usize> = keywords
         .iter()
-        .filter_map(|kw| lower_text.find(kw.as_str()))
+        .filter_map(|kw| {
+            // Compare char-by-char so positions stay in sync with `text`.
+            let kw_chars: Vec<char> = kw.chars().collect();
+            let text_chars: Vec<char> = text.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect();
+            text_chars.windows(kw_chars.len())
+                .position(|w| w == kw_chars.as_slice())
+        })
         .min();
 
-    let (start, end) = match match_pos {
+    // Helper: convert a char index to its byte offset in `text`.
+    let char_to_byte = |ci: usize| -> usize {
+        text.char_indices()
+            .nth(ci)
+            .map(|(b, _)| b)
+            .unwrap_or(text.len())
+    };
+
+    let (start_char, end_char) = match match_char_pos {
         Some(pos) => {
-            // Center the window around the match
             let half = max_len / 2;
             let raw_start = pos.saturating_sub(half);
-            // Snap to word boundary
+            // Snap to word boundary (walk backwards to find a space)
             let start = if raw_start > 0 {
-                text[..raw_start]
+                let byte_start = char_to_byte(raw_start);
+                text[..byte_start]
                     .rfind(' ')
-                    .map(|p| p + 1)
+                    .map(|b| text[..=b].chars().count())
                     .unwrap_or(0)
             } else {
                 0
             };
-            let raw_end = (start + max_len).min(text.len());
-            let end = if raw_end < text.len() {
-                text[..raw_end].rfind(' ').unwrap_or(raw_end)
+            let raw_end = (start + max_len).min(char_count);
+            let end = if raw_end < char_count {
+                let byte_end = char_to_byte(raw_end);
+                text[..byte_end]
+                    .rfind(' ')
+                    .map(|b| text[..b].chars().count())
+                    .unwrap_or(raw_end)
             } else {
-                text.len()
+                char_count
             };
             (start, end)
         }
         None => {
-            // No keyword match — show beginning
-            let raw_end = max_len.min(text.len());
-            let end = if raw_end < text.len() {
-                text[..raw_end].rfind(' ').unwrap_or(raw_end)
+            let raw_end = max_len.min(char_count);
+            let end = if raw_end < char_count {
+                let byte_end = char_to_byte(raw_end);
+                text[..byte_end]
+                    .rfind(' ')
+                    .map(|b| text[..b].chars().count())
+                    .unwrap_or(raw_end)
             } else {
                 raw_end
             };
@@ -150,11 +174,14 @@ fn kwic_snippet(text: &str, query: &str, max_len: usize) -> String {
         }
     };
 
-    let mut snippet = text[start..end].to_string();
-    if start > 0 {
+    let byte_start = char_to_byte(start_char);
+    let byte_end = char_to_byte(end_char);
+
+    let mut snippet = text[byte_start..byte_end].to_string();
+    if start_char > 0 {
         snippet = format!("...{snippet}");
     }
-    if end < text.len() {
+    if end_char < char_count {
         snippet.push_str("...");
     }
     snippet

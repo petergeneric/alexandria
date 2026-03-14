@@ -1,3 +1,5 @@
+uniffi::setup_scaffolding!();
+
 pub mod extract;
 pub mod ffi;
 pub mod filter;
