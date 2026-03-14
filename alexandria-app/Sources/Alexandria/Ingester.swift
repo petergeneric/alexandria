@@ -1,23 +1,103 @@
 import Foundation
+import IOKit.ps
 
 class Ingester {
+    private static let lowBatteryThreshold = 20
+
     private let engine: SearchEngineWrapper
     private let settings: AppSettings
     private var timer: Timer?
     private var isRunning = false
+    private var isLowPowerMode: Bool
+    private var powerSourceRunLoopSource: CFRunLoopSource?
 
     init(engine: SearchEngineWrapper, settings: AppSettings = .shared) {
         self.engine = engine
         self.settings = settings
+        self.isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
         scheduleHourlyTimer()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(powerStateDidChange),
+            name: NSNotification.Name.NSProcessInfoPowerStateDidChange,
+            object: nil
+        )
+
+        installPowerSourceObserver()
     }
 
     deinit {
         timer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+        if let source = powerSourceRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
+        }
+    }
+
+    private func installPowerSourceObserver() {
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        guard let source = IOPSNotificationCreateRunLoopSource({ context in
+            guard let context = context else { return }
+            let ingester = Unmanaged<Ingester>.fromOpaque(context).takeUnretainedValue()
+            ingester.handlePowerSourceChange()
+        }, context)?.takeRetainedValue() else {
+            return
+        }
+        powerSourceRunLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+    }
+
+    private func handlePowerSourceChange() {
+        let battery = batteryState()
+        if let level = battery.level {
+            if level <= Self.lowBatteryThreshold {
+                print("Battery at \(level)% — pausing automatic indexing")
+            } else if !battery.onBattery {
+                // Plugged back in — try to catch up
+                ingestIfNeeded()
+            }
+        }
+    }
+
+    @objc private func powerStateDidChange() {
+        isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        if isLowPowerMode {
+            print("Low Power Mode enabled — pausing automatic indexing")
+        } else {
+            print("Low Power Mode disabled — resuming automatic indexing")
+            ingestIfNeeded()
+        }
+    }
+
+    private struct BatteryState {
+        var onBattery: Bool
+        var level: Int? // 0–100, nil if no battery
+    }
+
+    private func batteryState() -> BatteryState {
+        guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let sources = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [Any],
+              let first = sources.first,
+              let desc = IOPSGetPowerSourceDescription(snapshot, first as CFTypeRef)?
+                  .takeUnretainedValue() as? [String: Any] else {
+            return BatteryState(onBattery: false, level: nil)
+        }
+        let onBattery = (desc[kIOPSPowerSourceStateKey] as? String) == kIOPSBatteryPowerValue
+        let level = desc[kIOPSCurrentCapacityKey] as? Int
+        return BatteryState(onBattery: onBattery, level: level)
     }
 
     /// Run ingestion from all configured sources. Safe to call frequently — skips if already running.
     func ingestIfNeeded() {
+        guard !isLowPowerMode else { return }
+
+        let battery = batteryState()
+        if battery.onBattery {
+            if !settings.indexOnBattery { return }
+            if let level = battery.level, level <= Self.lowBatteryThreshold { return }
+        }
+
         guard !isRunning else { return }
 
         isRunning = true

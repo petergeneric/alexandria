@@ -6,6 +6,5 @@ pub mod filter;
 pub mod index;
 pub mod ingest;
 pub mod page_store;
-pub mod power;
 pub mod queue;
 pub mod search;

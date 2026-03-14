@@ -33,6 +33,19 @@ struct SettingsView: View {
 
             Section {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Power")
+                        .font(.headline)
+                    Toggle("Index while on battery power", isOn: $settings.indexOnBattery)
+                    if settings.indexOnBattery {
+                        Text("Indexing will pause automatically when charge is low.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Index")
                         .font(.headline)
 
@@ -57,7 +70,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 220)
+        .frame(width: 480, height: 280)
         .alert("Clear Index?", isPresented: $showClearConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Clear", role: .destructive) {
