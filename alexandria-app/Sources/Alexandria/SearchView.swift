@@ -2,6 +2,12 @@ import SwiftUI
 
 struct SearchView: View {
     @StateObject private var viewModel = SearchViewModel()
+    @State private var showFacets = true
+
+    private var hasResults: Bool { !viewModel.results.isEmpty }
+    private var hasActiveFilters: Bool {
+        viewModel.selectedDateRange != .all || !viewModel.selectedDomains.isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,12 +29,21 @@ struct SearchView: View {
                     }
                     .buttonStyle(.plain)
                 }
+
+                if hasResults {
+                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showFacets.toggle() } }) {
+                        Image(systemName: "sidebar.right")
+                            .foregroundColor(showFacets ? .accentColor : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Toggle filters")
+                }
             }
             .padding(12)
 
             Divider()
 
-            // Results
+            // Results + Facet sidebar
             if viewModel.results.isEmpty && !viewModel.query.isEmpty && !viewModel.isSearching {
                 Spacer()
                 Text("No results found")
@@ -50,19 +65,43 @@ struct SearchView: View {
                 }
                 Spacer()
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(viewModel.results) { result in
-                            ResultRow(result: result, query: viewModel.query)
-                                .onTapGesture {
-                                    openURL(result.url)
+                HStack(spacing: 0) {
+                    // Results list
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            if hasActiveFilters {
+                                FilterBanner(viewModel: viewModel)
+                            }
+                            ForEach(viewModel.filteredResults) { result in
+                                ResultRow(result: result, query: viewModel.query)
+                                    .onTapGesture {
+                                        openURL(result.url)
+                                    }
+                            }
+                            if viewModel.filteredResults.isEmpty {
+                                VStack {
+                                    Spacer(minLength: 40)
+                                    Text("No results match the current filters")
+                                        .foregroundColor(.secondary)
+                                        .font(.body)
+                                        .frame(maxWidth: .infinity)
+                                    Spacer(minLength: 40)
                                 }
+                            }
                         }
+                    }
+
+                    // Facet sidebar
+                    if showFacets {
+                        Divider()
+                        FacetSidebar(viewModel: viewModel)
+                            .frame(width: 200)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
             }
         }
-        .frame(minWidth: 500, minHeight: 300)
+        .frame(minWidth: 600, minHeight: 300)
     }
 
     private func openURL(_ urlString: String) {
@@ -175,6 +214,157 @@ private func formatRelativeTime(_ date: Date) -> String {
 
 private func formatTime(_ date: Date) -> String {
     date.formatted(.dateTime.hour().minute())
+}
+
+// MARK: - Facet Sidebar
+
+private struct FacetSidebar: View {
+    @ObservedObject var viewModel: SearchViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Date range facet
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Date Range")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .textCase(.uppercase)
+
+                    ForEach(DateRangeFilter.allCases) { filter in
+                        let count = viewModel.dateRangeCounts[filter] ?? 0
+                        Button(action: {
+                            viewModel.selectedDateRange = (viewModel.selectedDateRange == filter) ? .all : filter
+                        }) {
+                            HStack {
+                                Image(systemName: viewModel.selectedDateRange == filter ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.selectedDateRange == filter ? .accentColor : .secondary)
+                                Text(filter.rawValue)
+                                    .font(.caption)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Text("\(count)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(count == 0 && filter != .all)
+                    }
+                }
+
+                Divider()
+
+                // Domain facet
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Domain")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .textCase(.uppercase)
+                        Spacer()
+                        if !viewModel.selectedDomains.isEmpty {
+                            Button("Clear") {
+                                viewModel.selectedDomains.removeAll()
+                            }
+                            .font(.caption2)
+                            .buttonStyle(.plain)
+                            .foregroundColor(.accentColor)
+                        }
+                    }
+
+                    ForEach(viewModel.domainFacets) { facet in
+                        Button(action: {
+                            if viewModel.selectedDomains.contains(facet.domain) {
+                                viewModel.selectedDomains.remove(facet.domain)
+                            } else {
+                                viewModel.selectedDomains.insert(facet.domain)
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: viewModel.selectedDomains.contains(facet.domain) ? "checkmark.square.fill" : "square")
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.selectedDomains.contains(facet.domain) ? .accentColor : .secondary)
+                                Text(facet.domain)
+                                    .font(.caption)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Text("\(facet.count)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(12)
+        }
+    }
+}
+
+// MARK: - Filter Banner
+
+private struct FilterBanner: View {
+    @ObservedObject var viewModel: SearchViewModel
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                .foregroundColor(.accentColor)
+                .font(.caption)
+
+            if viewModel.selectedDateRange != .all {
+                FilterChip(label: viewModel.selectedDateRange.rawValue) {
+                    viewModel.selectedDateRange = .all
+                }
+            }
+
+            ForEach(Array(viewModel.selectedDomains).sorted(), id: \.self) { domain in
+                FilterChip(label: domain) {
+                    viewModel.selectedDomains.remove(domain)
+                }
+            }
+
+            Spacer()
+
+            Button("Clear All") {
+                viewModel.selectedDateRange = .all
+                viewModel.selectedDomains.removeAll()
+            }
+            .font(.caption2)
+            .buttonStyle(.plain)
+            .foregroundColor(.accentColor)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.05))
+    }
+}
+
+private struct FilterChip: View {
+    let label: String
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .lineLimit(1)
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.accentColor.opacity(0.1))
+        .cornerRadius(4)
+    }
 }
 
 /// Highlight query keywords in text using a yellow/orange background tint.

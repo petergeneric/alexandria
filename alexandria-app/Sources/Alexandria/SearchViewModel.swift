@@ -1,10 +1,77 @@
 import Foundation
 import Combine
 
+enum DateRangeFilter: String, CaseIterable, Identifiable {
+    case all = "All Time"
+    case today = "Today"
+    case yesterday = "Yesterday"
+    case thisWeek = "This Week"
+    case thisMonth = "This Month"
+    case thisYear = "This Year"
+
+    var id: String { rawValue }
+
+    func matches(_ date: Date?) -> Bool {
+        guard let date = date else { return self == .all }
+        let calendar = Calendar.current
+        let now = Date()
+        switch self {
+        case .all: return true
+        case .today: return calendar.isDateInToday(date)
+        case .yesterday: return calendar.isDateInYesterday(date)
+        case .thisWeek:
+            return calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear)
+        case .thisMonth:
+            return calendar.isDate(date, equalTo: now, toGranularity: .month)
+        case .thisYear:
+            return calendar.isDate(date, equalTo: now, toGranularity: .year)
+        }
+    }
+}
+
+struct DomainFacet: Identifiable {
+    let domain: String
+    let count: Int
+    var id: String { domain }
+}
+
 class SearchViewModel: ObservableObject {
     @Published var query: String = ""
     @Published var results: [SearchResult] = []
     @Published var isSearching = false
+    @Published var selectedDateRange: DateRangeFilter = .all
+    @Published var selectedDomains: Set<String> = []
+
+    var filteredResults: [SearchResult] {
+        results.filter { result in
+            let dateMatch = selectedDateRange.matches(result.visitedAt)
+            let domainMatch = selectedDomains.isEmpty || selectedDomains.contains(result.domain)
+            return dateMatch && domainMatch
+        }
+    }
+
+    var domainFacets: [DomainFacet] {
+        // Count domains from date-filtered results only
+        let dateFiltered = results.filter { selectedDateRange.matches($0.visitedAt) }
+        var counts: [String: Int] = [:]
+        for r in dateFiltered {
+            counts[r.domain, default: 0] += 1
+        }
+        return counts.map { DomainFacet(domain: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+    }
+
+    var dateRangeCounts: [DateRangeFilter: Int] {
+        // Count results per date range (independent of date filter selection)
+        let domainFiltered = selectedDomains.isEmpty
+            ? results
+            : results.filter { selectedDomains.contains($0.domain) }
+        var counts: [DateRangeFilter: Int] = [:]
+        for filter in DateRangeFilter.allCases {
+            counts[filter] = domainFiltered.filter { filter.matches($0.visitedAt) }.count
+        }
+        return counts
+    }
 
     private let engine: SearchEngineWrapper?
     private var debounceTask: Task<Void, Never>?
@@ -23,6 +90,8 @@ class SearchViewModel: ObservableObject {
                 self?.debounceTask?.cancel()
                 guard !newQuery.isEmpty else {
                     self?.results = []
+                    self?.selectedDateRange = .all
+                    self?.selectedDomains.removeAll()
                     return
                 }
                 self?.debounceTask = Task { @MainActor [weak self] in
@@ -46,7 +115,7 @@ class SearchViewModel: ObservableObject {
         let q = query
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let searchResults = engine.search(query: q, limit: 20)
+            let searchResults = engine.search(query: q, limit: 50)
             DispatchQueue.main.async {
                 guard let self = self, self.query == q else { return }
                 self.results = searchResults
