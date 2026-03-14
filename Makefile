@@ -1,7 +1,7 @@
 .PHONY: all app rust swift bundle run clean extension extension-icons bindings
 
 RUST_SOURCES = $(shell find crates -name '*.rs' 2>/dev/null)
-SWIFT_SOURCES = $(shell find alexandria-app/Sources -name '*.swift' 2>/dev/null)
+SWIFT_SOURCES = $(shell find macos/Sources -name '*.swift' 2>/dev/null)
 
 APP_BUNDLE  = target/Alexandria.app
 CONTENTS    = $(APP_BUNDLE)/Contents
@@ -11,15 +11,15 @@ RESOURCES   = $(CONTENTS)/Resources
 RUST_LIB    = target/release/libalexandria_core.a
 RUST_DYLIB  = target/debug/libalexandria_core.dylib
 NATIVE_HOST = target/release/alexandria-native-host
-SWIFT_BIN   = alexandria-app/.build/release/Alexandria
-INFO_PLIST  = alexandria-app/Sources/Alexandria/Info.plist
+SWIFT_BIN   = macos/.build/release/Alexandria
+INFO_PLIST  = macos/Sources/Alexandria/Info.plist
 ICON_SVG    = docs/icon.svg
 ICON_ICNS   = $(RESOURCES)/AppIcon.icns
 HELPERS     = $(CONTENTS)/Helpers
 
 # Generated UniFFI binding outputs (used as Make targets)
-BINDINGS_SWIFT = alexandria-app/Sources/Alexandria/alexandria_core.swift
-BINDINGS_HEADER = alexandria-app/Sources/alexandria_coreFFI/alexandria_coreFFI.h
+BINDINGS_SWIFT = macos/Sources/Alexandria/alexandria_core.swift
+BINDINGS_HEADER = macos/Sources/alexandria_coreFFI/alexandria_coreFFI.h
 
 all: app
 
@@ -48,17 +48,17 @@ $(BINDINGS_SWIFT) $(BINDINGS_HEADER): $(RUST_DYLIB)
 		--language swift \
 		--out-dir target/uniffi-swift
 	cp target/uniffi-swift/alexandria_core.swift \
-		alexandria-app/Sources/Alexandria/
+		macos/Sources/Alexandria/
 	cp target/uniffi-swift/alexandria_coreFFI.h \
-		alexandria-app/Sources/alexandria_coreFFI/
+		macos/Sources/alexandria_coreFFI/
 	cp target/uniffi-swift/alexandria_coreFFI.modulemap \
-		alexandria-app/Sources/alexandria_coreFFI/module.modulemap
+		macos/Sources/alexandria_coreFFI/module.modulemap
 
 # Step 3: Build the Swift binary (depends on Rust lib + bindings)
 swift: $(SWIFT_BIN)
 
 $(SWIFT_BIN): $(RUST_LIB) $(NATIVE_HOST) $(BINDINGS_SWIFT) $(SWIFT_SOURCES)
-	cd alexandria-app && swift build -c release
+	cd macos && swift build -c release
 
 # Step 3: Assemble the .app bundle
 bundle: $(SWIFT_BIN)
@@ -128,5 +128,5 @@ run: app
 
 clean:
 	cargo clean
-	cd alexandria-app && swift package clean
+	cd macos && swift package clean
 	rm -rf $(APP_BUNDLE)

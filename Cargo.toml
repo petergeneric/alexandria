@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/alexandria-core", "crates/alexandria-cli", "crates/alexandria-native-host"]
+members = ["crates/core", "crates/cli", "crates/browser-native-host"]
 resolver = "2"
 
 [workspace.dependencies]

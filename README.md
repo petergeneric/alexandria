@@ -44,9 +44,10 @@ cargo build --workspace
 ```
 alexandria/
   crates/
-    alexandria-core/  # Library: ingestion, indexing, search, FFI
-    alexandria-cli/   # CLI binary (`alex`)
-  alexandria-app/     # Swift macOS app (SwiftUI + UniFFI)
+    core/             # Library: ingestion, indexing, search, FFI
+    cli/              # CLI binary (`alex`)
+    browser-native-host/ # Native messaging host for Firefox
+  macos/              # Swift macOS app (SwiftUI + UniFFI)
   extension/          # Firefox extension
   docs/
     architecture/     # Design docs

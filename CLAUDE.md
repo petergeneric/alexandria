@@ -27,9 +27,10 @@ cargo build --workspace
 
 ## Workspace Layout
 
-- `crates/alexandria-core/` — library: extract, ingest, index, search, filter, queue, power, ffi modules
-- `crates/alexandria-cli/` — CLI binary (`alex`) with clap subcommands
-- `alexandria-app/` — Swift macOS native app (SwiftUI + UniFFI bindings)
+- `crates/core/` — library: extract, ingest, index, search, filter, queue, power, ffi modules
+- `crates/cli/` — CLI binary (`alex`) with clap subcommands
+- `crates/browser-native-host/` — native messaging host for the browser extension
+- `macos/` — Swift macOS native app (SwiftUI + UniFFI bindings)
 - `extension/` — Firefox extension (not yet implemented)
 - `docs/` — architecture and API documentation
 

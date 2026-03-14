@@ -9,7 +9,7 @@ name = "alex"
 path = "src/main.rs"
 
 [dependencies]
-alexandria-core = { path = "../alexandria-core" }
+alexandria-core = { path = "../core" }
 clap = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

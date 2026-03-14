@@ -6,7 +6,7 @@ The macOS Swift app communicates with `alexandria-core` through [UniFFI](https:/
 
 ## Rust Interface
 
-The FFI surface is defined in `crates/alexandria-core/src/ffi.rs` using UniFFI proc-macros:
+The FFI surface is defined in `crates/core/src/ffi.rs` using UniFFI proc-macros:
 
 - `AlexandriaEngine` — `#[derive(uniffi::Object)]` wrapping the search engine and index
 - `AlexandriaSearchResult` — `#[derive(uniffi::Record)]` (plain data struct) for results
@@ -26,9 +26,9 @@ cargo build -p alexandria-core
 cargo run --bin uniffi-bindgen generate \
     --library target/debug/libalexandria_core.dylib \
     --language swift \
-    --out-dir alexandria-app/Sources/Alexandria
+    --out-dir macos/Sources/Alexandria
 
 # Copy header to module map location
-cp alexandria-app/Sources/Alexandria/alexandria_coreFFI.h \
-   alexandria-app/Sources/alexandria_coreFFI/
+cp macos/Sources/Alexandria/alexandria_coreFFI.h \
+   macos/Sources/alexandria_coreFFI/
 ```
