@@ -165,47 +165,54 @@ var AlexRules = (function () {
     return new RegExp("^" + escaped + "$");
   }
 
-  // Evaluate URL against internal + user blocklists.
-  // Returns true if the URL should be blocked.
-  function isBlocked(url, blocklist) {
+  // Parse URL and check against internal hard blocks (banks, auth, etc.).
+  // Returns { hostname, pathname } if safe, or null if hard-blocked.
+  function parseAndCheck(url) {
     var parsed;
     try {
       parsed = new URL(url);
     } catch (e) {
-      return false;
+      return null;
     }
     var hostname = parsed.hostname;
-    var pathname = parsed.pathname;
-
-    // Check internal domain blacklist (Set + parent-domain walk)
-    if (isInternalBlocked(hostname)) return true;
-
-    // Check login.* pattern
-    if (LOGIN_DOMAIN_RE.test(hostname)) return true;
-
-    // Check blocked path prefixes
-    var lowerPath = pathname.toLowerCase();
+    if (isInternalBlocked(hostname)) return null;
+    if (LOGIN_DOMAIN_RE.test(hostname)) return null;
+    var lowerPath = parsed.pathname.toLowerCase();
     for (var i = 0; i < BLOCKED_PATH_PREFIXES.length; i++) {
       if (lowerPath === BLOCKED_PATH_PREFIXES[i] ||
-          lowerPath.startsWith(BLOCKED_PATH_PREFIXES[i] + "/")) return true;
+          lowerPath.startsWith(BLOCKED_PATH_PREFIXES[i] + "/")) return null;
     }
+    return { hostname: hostname };
+  }
 
-    // Check user blocklist
-    if (blocklist && blocklist.length > 0) {
-      for (var i = 0; i < blocklist.length; i++) {
-        var pattern = blocklist[i].trim();
-        if (!pattern || pattern.startsWith("#")) continue;
-        if (matchesDomain(hostname, pattern)) return true;
-      }
+  function matchesAnyDomain(hostname, list) {
+    for (var i = 0; i < list.length; i++) {
+      var pattern = list[i].trim();
+      if (!pattern || pattern.startsWith("#")) continue;
+      if (matchesDomain(hostname, pattern)) return true;
     }
-
     return false;
+  }
+
+  // Decide whether a URL should be auto-saved given the current mode.
+  // disabledDomains always takes preference over enabledDomains.
+  function shouldAutoSave(url, mode, enabledDomains, disabledDomains) {
+    var info = parseAndCheck(url);
+    if (!info) return false;
+    if (disabledDomains && disabledDomains.length > 0) {
+      if (matchesAnyDomain(info.hostname, disabledDomains)) return false;
+    }
+    if (mode === "enabled") {
+      if (!enabledDomains || enabledDomains.length === 0) return false;
+      return matchesAnyDomain(info.hostname, enabledDomains);
+    }
+    return true;
   }
 
   return {
     isSpecialPage: isSpecialPage,
     shouldSkipMime: shouldSkipMime,
-    isBlocked: isBlocked,
+    shouldAutoSave: shouldAutoSave,
     matchesDomain: matchesDomain,
     globToRegex: globToRegex,
   };

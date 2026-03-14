@@ -20,6 +20,13 @@
       margin: 8px 0;
     }
     .checkbox-row label { margin: 0; font-weight: normal; }
+    .radio-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+    }
+    .radio-row label { margin: 0; font-weight: normal; }
     textarea {
       width: 100%;
       height: 120px;
@@ -63,9 +70,25 @@
     <label for="autosave">Automatically save pages</label>
   </div>
 
-  <label for="blocklist">Blocked domains (one per line)</label>
-  <textarea id="blocklist" placeholder="example.com&#10;ads.example.net"></textarea>
-  <div class="hint">Pages on these domains will not be auto-saved. Manual save still works.</div>
+  <label>Auto-save mode</label>
+  <div class="radio-row">
+    <input type="radio" name="mode" id="mode-enabled" value="enabled" checked>
+    <label for="mode-enabled">Only save listed domains</label>
+  </div>
+  <div class="radio-row">
+    <input type="radio" name="mode" id="mode-all" value="all">
+    <label for="mode-all">Save all domains</label>
+  </div>
+
+  <div id="enabled-section">
+    <label for="enabled-domains">Enabled domains (one per line)</label>
+    <textarea id="enabled-domains" placeholder="example.com&#10;docs.example.net"></textarea>
+    <div class="hint">Only pages on these domains will be auto-saved.</div>
+  </div>
+
+  <label for="disabled-domains">Disabled domains (one per line)</label>
+  <textarea id="disabled-domains" placeholder="example.com&#10;ads.example.net"></textarea>
+  <div class="hint">Pages on these domains will never be auto-saved. Manual save still works.</div>
 
   <button id="save-btn">Save</button>
   <button id="ping-btn">Test Connection</button>

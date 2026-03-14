@@ -115,7 +115,7 @@
     teardownEngagement();
 
     browser.storage.local.get(
-      ["options-autosave", "options-blocklist"],
+      ["options-autosave", "options-mode", "options-enabled-domains", "options-disabled-domains"],
       function (result) {
         var autosave =
           result["options-autosave"] === undefined
@@ -123,8 +123,10 @@
             : result["options-autosave"];
         if (!autosave) return;
 
-        var blocklist = result["options-blocklist"] || [];
-        if (AlexRules.isBlocked(location.href, blocklist)) return;
+        var mode = result["options-mode"] || "enabled";
+        var enabled = result["options-enabled-domains"] || [];
+        var disabled = result["options-disabled-domains"] || [];
+        if (!AlexRules.shouldAutoSave(location.href, mode, enabled, disabled)) return;
 
         var data = capturePage();
         browser.runtime.sendMessage({ type: "autosave", data: data });

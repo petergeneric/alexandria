@@ -2,33 +2,59 @@
 
 (function () {
   var autosaveEl = document.getElementById("autosave");
-  var blocklistEl = document.getElementById("blocklist");
+  var modeEnabledEl = document.getElementById("mode-enabled");
+  var modeAllEl = document.getElementById("mode-all");
+  var enabledSection = document.getElementById("enabled-section");
+  var enabledEl = document.getElementById("enabled-domains");
+  var disabledEl = document.getElementById("disabled-domains");
   var saveBtn = document.getElementById("save-btn");
   var pingBtn = document.getElementById("ping-btn");
   var statusEl = document.getElementById("status");
 
+  function updateSections() {
+    enabledSection.style.display = modeEnabledEl.checked ? "" : "none";
+  }
+
+  modeEnabledEl.addEventListener("change", updateSections);
+  modeAllEl.addEventListener("change", updateSections);
+
   // Load saved settings
   browser.storage.local.get(
-    ["options-autosave", "options-blocklist"],
+    ["options-autosave", "options-mode", "options-enabled-domains", "options-disabled-domains"],
     function (result) {
       if (result["options-autosave"] !== undefined) {
         autosaveEl.checked = result["options-autosave"];
       }
-      if (result["options-blocklist"]) {
-        blocklistEl.value = result["options-blocklist"].join("\n");
+      if (result["options-mode"] === "all") {
+        modeAllEl.checked = true;
+      } else {
+        modeEnabledEl.checked = true;
       }
+      if (result["options-enabled-domains"]) {
+        enabledEl.value = result["options-enabled-domains"].join("\n");
+      }
+      if (result["options-disabled-domains"]) {
+        disabledEl.value = result["options-disabled-domains"].join("\n");
+      }
+      updateSections();
     }
   );
 
-  saveBtn.addEventListener("click", function () {
-    var blocklist = blocklistEl.value
+  function parseList(el) {
+    return el.value
       .split("\n")
       .map(function (s) { return s.trim(); })
       .filter(function (s) { return s.length > 0; });
+  }
+
+  saveBtn.addEventListener("click", function () {
+    var mode = modeEnabledEl.checked ? "enabled" : "all";
 
     browser.storage.local.set({
       "options-autosave": autosaveEl.checked,
-      "options-blocklist": blocklist,
+      "options-mode": mode,
+      "options-enabled-domains": parseList(enabledEl),
+      "options-disabled-domains": parseList(disabledEl),
     });
 
     statusEl.className = "status ok";
