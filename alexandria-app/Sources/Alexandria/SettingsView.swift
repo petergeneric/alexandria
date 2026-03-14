@@ -4,7 +4,9 @@ struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
     @State private var pageCount: UInt64 = 0
     @State private var indexSize: String = ""
-    @State private var showClearConfirm = false
+    @State private var showDeleteConfirm = false
+    @State private var showReindexConfirm = false
+    @State private var isReindexing = false
 
     private let engine: SearchEngineWrapper? = {
         let path = SearchViewModel.resolveIndexPath()
@@ -59,25 +61,38 @@ struct SettingsView: View {
 
                         Spacer()
 
-                        Button(role: .destructive) {
-                            showClearConfirm = true
-                        } label: {
-                            Text("Clear Index")
+                        Button("Reindex") {
+                            showReindexConfirm = true
                         }
-                        .disabled(pageCount == 0)
+                        .disabled(pageCount == 0 || isReindexing)
+
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            Text("Delete History")
+                        }
+                        .disabled(pageCount == 0 || isReindexing)
                     }
                 }
             }
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 280)
-        .alert("Clear Index?", isPresented: $showClearConfirm) {
+        .alert("Delete History?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
-            Button("Clear", role: .destructive) {
-                clearIndex()
+            Button("Delete", role: .destructive) {
+                deleteHistory()
             }
         } message: {
-            Text("Are you sure? Your entire browsing history index will be erased. This cannot be undone.")
+            Text("Are you sure? Your entire browsing history will be permanently deleted. This cannot be undone.")
+        }
+        .alert("Reindex?", isPresented: $showReindexConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reindex") {
+                reindex()
+            }
+        } message: {
+            Text("This will rebuild the search index from your stored pages. This may take a while.")
         }
         .onAppear {
             refreshStats()
@@ -89,9 +104,20 @@ struct SettingsView: View {
         indexSize = Self.directorySize(at: SearchViewModel.resolveIndexPath())
     }
 
-    private func clearIndex() {
-        _ = engine?.clearIndex()
+    private func deleteHistory() {
+        _ = engine?.deleteHistory(storePath: settings.storePath)
         refreshStats()
+    }
+
+    private func reindex() {
+        isReindexing = true
+        DispatchQueue.global(qos: .utility).async {
+            _ = engine?.reindex(storePath: settings.storePath)
+            DispatchQueue.main.async {
+                isReindexing = false
+                refreshStats()
+            }
+        }
     }
 
     static func directorySize(at path: String) -> String {

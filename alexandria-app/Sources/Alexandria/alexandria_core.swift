@@ -506,7 +506,7 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol AlexandriaEngineProtocol : AnyObject {
     
-    func clearIndex() throws 
+    func deleteHistory(storePath: String) throws 
     
     func docCount() throws  -> UInt64
     
@@ -516,7 +516,9 @@ public protocol AlexandriaEngineProtocol : AnyObject {
     
     func pendingStatus(storePath: String) throws  -> PendingStatus
     
-    func search(query: String, limit: UInt32, offset: UInt32) throws  -> [AlexandriaSearchResult]
+    func reindex(storePath: String) throws  -> UInt64
+    
+    func search(query: String, limit: UInt32, offset: UInt32, storePath: String) throws  -> [AlexandriaSearchResult]
     
 }
 
@@ -578,8 +580,9 @@ public static func `open`(indexPath: String)throws  -> AlexandriaEngine {
     
 
     
-open func clearIndex()throws  {try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
-    uniffi_alexandria_core_fn_method_alexandriaengine_clear_index(self.uniffiClonePointer(),$0
+open func deleteHistory(storePath: String)throws  {try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_delete_history(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),$0
     )
 }
 }
@@ -615,12 +618,21 @@ open func pendingStatus(storePath: String)throws  -> PendingStatus {
 })
 }
     
-open func search(query: String, limit: UInt32, offset: UInt32)throws  -> [AlexandriaSearchResult] {
+open func reindex(storePath: String)throws  -> UInt64 {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_reindex(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),$0
+    )
+})
+}
+    
+open func search(query: String, limit: UInt32, offset: UInt32, storePath: String)throws  -> [AlexandriaSearchResult] {
     return try  FfiConverterSequenceTypeAlexandriaSearchResult.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
     uniffi_alexandria_core_fn_method_alexandriaengine_search(self.uniffiClonePointer(),
         FfiConverterString.lower(query),
         FfiConverterUInt32.lower(limit),
-        FfiConverterUInt32.lower(offset),$0
+        FfiConverterUInt32.lower(offset),
+        FfiConverterString.lower(storePath),$0
     )
 })
 }
@@ -982,7 +994,7 @@ private var initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_alexandria_core_checksum_method_alexandriaengine_clear_index() != 25128) {
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_delete_history() != 511) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_doc_count() != 27746) {
@@ -997,7 +1009,10 @@ private var initializationResult: InitializationResult = {
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_pending_status() != 46783) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_alexandria_core_checksum_method_alexandriaengine_search() != 43099) {
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_reindex() != 3729) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_search() != 4659) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_constructor_alexandriaengine_open() != 37369) {

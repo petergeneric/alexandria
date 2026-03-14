@@ -130,6 +130,16 @@ impl PageStore {
         }
     }
 
+    pub fn delete_all(&self) -> Result<(), PageStoreError> {
+        self.db.execute_batch("DELETE FROM pages")?;
+        Ok(())
+    }
+
+    pub fn reset_indexed(&self) -> Result<(), PageStoreError> {
+        self.db.execute_batch("UPDATE pages SET indexed_at = NULL")?;
+        Ok(())
+    }
+
     pub fn mark_indexed(&self, source_hash: &str) -> Result<(), PageStoreError> {
         let now = chrono::Utc::now().timestamp();
         self.db.execute(

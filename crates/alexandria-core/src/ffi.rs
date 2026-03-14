@@ -105,7 +105,7 @@ impl AlexandriaEngine {
         Ok(searcher.num_docs())
     }
 
-    pub fn clear_index(&self) -> Result<(), AlexandriaError> {
+    pub fn delete_history(&self, store_path: String) -> Result<(), AlexandriaError> {
         let mut writer: tantivy::IndexWriter<tantivy::TantivyDocument> = self
             .index
             .writer(50_000_000)
@@ -123,7 +123,61 @@ impl AlexandriaEngine {
         let marker = Path::new(&self.index_path).join(".last-indexed");
         let _ = std::fs::remove_file(&marker);
 
+        // Truncate the SQLite page store
+        if !store_path.is_empty() {
+            let store =
+                PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
+                    reason: e.to_string(),
+                })?;
+            store.delete_all().map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        }
+
         Ok(())
+    }
+
+    pub fn reindex(&self, store_path: String) -> Result<u64, AlexandriaError> {
+        // Clear the Tantivy index
+        let mut writer: tantivy::IndexWriter<tantivy::TantivyDocument> = self
+            .index
+            .writer(50_000_000)
+            .map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        writer.delete_all_documents().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+        writer.commit().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
+        // Remove .last-indexed marker
+        let marker = Path::new(&self.index_path).join(".last-indexed");
+        let _ = std::fs::remove_file(&marker);
+
+        // Reset all pages in SQLite to pending
+        if store_path.is_empty() {
+            return Ok(0);
+        }
+        let store =
+            PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        store.reset_indexed().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
+        // Re-ingest everything in batches
+        let mut total = 0u64;
+        loop {
+            let batch = self.ingest_from_store(store_path.clone())?;
+            if batch == 0 {
+                break;
+            }
+            total += batch;
+        }
+        Ok(total)
     }
 
     pub fn pending_status(&self, store_path: String) -> Result<PendingStatus, AlexandriaError> {

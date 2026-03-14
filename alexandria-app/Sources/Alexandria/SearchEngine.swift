@@ -47,9 +47,14 @@ class SearchEngineWrapper {
         return count
     }
 
-    func clearIndex() -> Bool {
-        guard let _ = try? engine.clearIndex() else { return false }
+    func deleteHistory(storePath: String) -> Bool {
+        guard let _ = try? engine.deleteHistory(storePath: storePath) else { return false }
         return true
+    }
+
+    func reindex(storePath: String) -> Int {
+        guard let count = try? engine.reindex(storePath: storePath) else { return 0 }
+        return Int(count)
     }
 
     func search(query: String, limit: Int = 20, offset: Int = 0, storePath: String = "") -> [SearchResult] {
