@@ -16,7 +16,7 @@ class SearchPanel: NSPanel {
         isFloatingPanel = true
         level = .floating
         isMovableByWindowBackground = true
-        hidesOnDeactivate = false
+        hidesOnDeactivate = true
         titlebarAppearsTransparent = true
         titleVisibility = .hidden
 
