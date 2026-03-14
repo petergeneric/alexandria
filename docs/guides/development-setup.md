@@ -30,25 +30,16 @@ cargo test -p alexandria-core
 
 ```bash
 # Show help
-cargo run -p alexandria-cli -- --help
-
-# Index webcache files (incremental, skips already-indexed)
-cargo run -p alexandria-cli -- index ~/Downloads/webcache
-
-# Reindex from scratch (deletes existing index first)
-cargo run -p alexandria-cli -- reindex ~/Downloads/webcache
+./target/debug/alex --help
 
 # Search
-cargo run -p alexandria-cli -- search "rust error handling"
+./target/debug/alex search "rust error handling"
 
 # Search with JSON output
-cargo run -p alexandria-cli -- --json search "rust" --limit 5
-
-# Search with full HTML output
-cargo run -p alexandria-cli -- search "rust" --raw
+./target/debug/alex --json search "rust" --limit 5
 
 # Paginate results
-cargo run -p alexandria-cli -- search "rust" --limit 5 --offset 10
+./target/debug/alex search "rust" --limit 5 --offset 10
 ```
 
 ## Project Structure
@@ -62,20 +53,20 @@ alexandria/
       Cargo.toml
       src/
         lib.rs                # Module declarations
-        ingest.rs             # IngestSource trait + RecollFileSource
+        ingest.rs             # PageSnapshot type
         extract.rs            # HTML->Markdown->plaintext extraction
         filter.rs             # Site-specific HTML filtering
         index.rs              # Tantivy schema and indexing
         search.rs             # Search engine with KWIC snippets
+        page_store.rs         # SQLite page storage
         queue.rs              # Bounded channel queue
-        power.rs              # Low Power Mode detection
         ffi.rs                # UniFFI bindings for Swift
     alexandria-cli/
       Cargo.toml
       src/
-        main.rs               # CLI: index, reindex, search commands
+        main.rs               # CLI: search command
   alexandria-app/             # Swift macOS app (SwiftUI + UniFFI)
-  extension/                  # Firefox extension (not yet implemented)
+  extension/                  # Firefox extension
   docs/
     architecture/             # Design documents
     api/                      # API reference
@@ -93,6 +84,7 @@ alexandria/
 | `uniffi` | Rust-to-Swift FFI binding generator |
 | `clap` | CLI argument parsing |
 | `dirs` | Home directory expansion for `~` paths |
+| `zstd` | HTML compression in SQLite page store |
 
 ## Conventions
 

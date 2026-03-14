@@ -23,8 +23,7 @@ cargo build --workspace
 ## Key Design Decisions
 
 - Index plaintext, store raw HTML: better search relevance + original page preserved
-- `.last-indexed` timestamp file in index dir for incremental indexing
-- Supporting ingesting Recoll webcache folders. Recoll metadata files use positional line format (line 0: URL, line 2: MIME type), not key-value
+- Pages are captured by the browser extension into SQLite, then indexed into Tantivy in batches
 
 ## Workspace Layout
 

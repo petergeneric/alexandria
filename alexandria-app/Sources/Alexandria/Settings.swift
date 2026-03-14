@@ -9,13 +9,8 @@ class AppSettings: ObservableObject {
     }()
 
     private enum Keys {
-        static let webcachePath = "webcachePath"
         static let storePath = "storePath"
         static let indexOnBattery = "indexOnBattery"
-    }
-
-    @Published var webcachePath: String {
-        didSet { UserDefaults.standard.set(webcachePath, forKey: Keys.webcachePath) }
     }
 
     @Published var storePath: String {
@@ -27,7 +22,6 @@ class AppSettings: ObservableObject {
     }
 
     init() {
-        self.webcachePath = UserDefaults.standard.string(forKey: Keys.webcachePath) ?? ""
         self.storePath = UserDefaults.standard.string(forKey: Keys.storePath) ?? Self.defaultStorePath
         self.indexOnBattery = UserDefaults.standard.bool(forKey: Keys.indexOnBattery) // false by default
     }

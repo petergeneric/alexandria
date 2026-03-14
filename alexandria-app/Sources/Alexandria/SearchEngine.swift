@@ -20,13 +20,6 @@ class SearchEngineWrapper {
         engine = eng
     }
 
-    func ingest(sourceDir: String) -> Int {
-        guard let count = try? engine.ingest(sourceDir: sourceDir) else {
-            return 0
-        }
-        return Int(count)
-    }
-
     func ingestFromStore(storePath: String) -> Int {
         guard let count = try? engine.ingestFromStore(storePath: storePath) else {
             return 0

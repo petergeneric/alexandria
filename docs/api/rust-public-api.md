@@ -10,6 +10,7 @@ pub fn markdown_to_plaintext(md: &str) -> String;
 pub fn html_to_plaintext(html: &str) -> String;
 pub fn extract_title(html: &str) -> String;
 pub fn extract_domain(url: &str) -> String;
+pub fn extract_url_from_html(html: &str) -> Option<String>;
 ```
 
 ### `filter` module
@@ -23,34 +24,32 @@ Site-specific HTML filtering using CSS selectors. Strips boilerplate elements (n
 ### `ingest` module
 
 ```rust
-// Error type
-pub enum IngestError { Io, MissingPair, MetadataParse }
-
-// Page data
 pub struct PageSnapshot {
     pub url: String,
     pub title: String,
     pub content: String,       // plaintext for indexing
-    pub html: String,          // raw HTML for storage
     pub domain: String,
     pub source_hash: String,
     pub captured_at: DateTime<Utc>,
 }
+```
 
-// Trait
-pub trait IngestSource {
-    fn scan(&self) -> Result<Vec<PageSnapshot>, IngestError>;
-}
+### `page_store` module
 
-// File-based source
-pub struct RecollFileSource {
-    pub cache_dir: PathBuf,
-    pub modified_since: Option<SystemTime>,
+```rust
+pub struct PageStore { .. }
+impl PageStore {
+    pub fn open(path: &Path) -> Result<Self, PageStoreError>;
+    pub fn upsert(&self, url: &str, title: &str, html: &[u8], domain: &str,
+                  source_hash: &str, captured_at: i64) -> Result<(), PageStoreError>;
+    pub fn pending(&self, limit: usize) -> Result<Vec<StoredPage>, PageStoreError>;
+    pub fn pending_summary(&self) -> Result<(u64, Option<i64>), PageStoreError>;
+    pub fn get_html(&self, source_hash: &str) -> Result<Option<String>, PageStoreError>;
+    pub fn mark_indexed(&self, source_hash: &str) -> Result<(), PageStoreError>;
+    pub fn mark_indexed_batch(&self, hashes: &[&str]) -> Result<(), PageStoreError>;
+    pub fn delete_all(&self) -> Result<(), PageStoreError>;
+    pub fn reset_indexed(&self) -> Result<(), PageStoreError>;
 }
-impl RecollFileSource {
-    pub fn new(cache_dir: impl Into<PathBuf>) -> Self;
-}
-impl IngestSource for RecollFileSource { .. }
 ```
 
 ### `index` module
@@ -58,7 +57,7 @@ impl IngestSource for RecollFileSource { .. }
 ```rust
 pub enum IndexError { Tantivy, Io }
 
-pub struct SchemaFields { pub url, title, content, html, domain, visited_at, source_hash: Field }
+pub struct SchemaFields { pub url, title, content, domain, visited_at, source_hash: Field }
 
 pub fn build_schema() -> (Schema, SchemaFields);
 pub fn open_or_create_index(index_dir: &Path) -> Result<Index, IndexError>;
@@ -75,7 +74,6 @@ pub struct SearchResult {
     pub url: String,
     pub title: String,
     pub content_snippet: String,  // KWIC plaintext snippet
-    pub html: String,             // full stored raw HTML
     pub domain: String,
     pub score: f32,
     pub visited_at: Option<DateTime<Utc>>,
@@ -84,7 +82,8 @@ pub struct SearchResult {
 pub struct SearchEngine { .. }
 impl SearchEngine {
     pub fn new(index: Index) -> Self;
-    pub fn search(&self, query: &str, limit: usize, offset: usize) -> Result<Vec<SearchResult>, SearchError>;
+    pub fn search(&self, query: &str, limit: usize, offset: usize, store: Option<&PageStore>)
+        -> Result<Vec<SearchResult>, SearchError>;
 }
 ```
 
@@ -114,11 +113,13 @@ UniFFI-based Swift bindings. See [FFI Architecture](../architecture/ffi.md).
 pub struct AlexandriaEngine { .. }
 impl AlexandriaEngine {
     pub fn open(index_path: String) -> Result<Arc<Self>, AlexandriaError>;
-    pub fn search(&self, query: String, limit: u32, offset: u32)
+    pub fn search(&self, query: String, limit: u32, offset: u32, store_path: String)
         -> Result<Vec<AlexandriaSearchResult>, AlexandriaError>;
-    pub fn ingest(&self, source_dir: String) -> Result<u64, AlexandriaError>;
     pub fn doc_count(&self) -> Result<u64, AlexandriaError>;
-    pub fn clear_index(&self) -> Result<(), AlexandriaError>;
+    pub fn delete_history(&self, store_path: String) -> Result<(), AlexandriaError>;
+    pub fn reindex(&self, store_path: String) -> Result<u64, AlexandriaError>;
+    pub fn pending_status(&self, store_path: String) -> Result<PendingStatus, AlexandriaError>;
+    pub fn ingest_from_store(&self, store_path: String) -> Result<u64, AlexandriaError>;
 }
 
 pub struct AlexandriaSearchResult {

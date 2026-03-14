@@ -63,6 +63,39 @@ fn extract_title_inner(html: &str) -> Option<String> {
     Some(title.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 
+/// Extract a URL from HTML via <link rel="canonical"> or <meta property="og:url">.
+pub fn extract_url_from_html(html: &str) -> Option<String> {
+    extract_canonical(html).or_else(|| extract_og_url(html))
+}
+
+fn extract_canonical(html: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    let idx = lower.find("rel=\"canonical\"")?;
+    let tag_start = lower[..idx].rfind('<')?;
+    let tag_end = lower[idx..].find('>')? + idx;
+    let tag = &html[tag_start..=tag_end];
+    extract_attr_value(tag, "href")
+}
+
+fn extract_og_url(html: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    let idx = lower.find("property=\"og:url\"")?;
+    let tag_start = lower[..idx].rfind('<')?;
+    let tag_end = lower[idx..].find('>')? + idx;
+    let tag = &html[tag_start..=tag_end];
+    extract_attr_value(tag, "content")
+}
+
+fn extract_attr_value(tag: &str, attr: &str) -> Option<String> {
+    let lower = tag.to_lowercase();
+    let needle = format!("{attr}=\"");
+    let idx = lower.find(&needle)?;
+    let val_start = idx + needle.len();
+    let val_end = tag[val_start..].find('"')? + val_start;
+    let url = tag[val_start..val_end].trim();
+    if url.starts_with("http") { Some(url.to_string()) } else { None }
+}
+
 /// Extract the domain from a URL.
 pub fn extract_domain(url_str: &str) -> String {
     url::Url::parse(url_str)

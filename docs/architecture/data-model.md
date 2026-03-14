@@ -1,41 +1,32 @@
 # Data Model
 
-## Recoll Webcache Format (Source Data)
+## SQLite Page Store
 
-The initial ingestion source reads from Recoll's webcache directory (typically `~/Downloads/webcache/`).
+The browser extension captures pages into a SQLite database (`pages.db`). Each page is stored with its raw HTML (zstd-compressed) and metadata.
 
-### File Structure
+### Schema
 
-Flat directory containing paired files identified by MD5 hash:
-
-| File Pattern | Content |
-|-------------|---------|
-| `recoll-we-m-{MD5}.rclwe` | Metadata (positional line format) |
-| `recoll-we-c-{MD5}.rclwe` | Raw HTML content |
-
-The `circache.crch` tar archive index is also present but ignored initially.
-
-### Metadata File Format
-
-Positional, one field per line:
-
-```
-https://example.com/page
-WebHistory
-text/html
-k:_unindexed:encoding=UTF-8
+```sql
+CREATE TABLE pages (
+    source_hash TEXT PRIMARY KEY,
+    url         TEXT NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    html        BLOB NOT NULL,          -- zstd-compressed raw HTML
+    domain      TEXT NOT NULL DEFAULT '',
+    captured_at INTEGER NOT NULL,       -- Unix timestamp
+    indexed_at  INTEGER                 -- NULL until indexed into Tantivy
+);
 ```
 
-| Line | Content |
-|------|---------|
-| 0 | URL |
-| 1 | Source label (ignored) |
-| 2 | MIME type |
-| 3 | Encoding metadata (ignored) |
+### Key Operations
 
-### Pairing Logic
-
-Files are paired by their MD5 hash. Both the `-m-` (metadata) and `-c-` (content) files must exist for a page to be ingested. Unpaired files are skipped.
+| Operation | Description |
+|-----------|-------------|
+| `upsert` | Insert or replace a page (resets `indexed_at` to NULL) |
+| `pending(limit)` | Fetch pages where `indexed_at IS NULL` |
+| `mark_indexed_batch` | Set `indexed_at` after successful Tantivy indexing |
+| `delete_all` | Truncate all pages (used by Delete History) |
+| `reset_indexed` | Set all `indexed_at` to NULL (used by Reindex) |
 
 ## Tantivy Schema
 
@@ -43,18 +34,17 @@ Files are paired by their MD5 hash. Both the `-m-` (metadata) and `-c-` (content
 |-------|------|---------|--------|-------|
 | `url` | STRING | yes | yes | Original page URL |
 | `title` | TEXT | yes | yes | Extracted from `<title>` tag |
-| `content` | TEXT | yes | **no** | Plaintext (markdown stripped), for search only |
-| `html` | TEXT | no | yes | Raw HTML, for snippet generation and rendering |
+| `content` | TEXT | yes | **no** | Plaintext for search only |
 | `domain` | STRING | yes | yes | Extracted from URL |
 | `visited_at` | DATE | yes | yes | Timestamp when page was captured |
-| `source_hash` | STRING | yes | yes | MD5 from Recoll filename, used for dedup |
+| `source_hash` | STRING | yes | yes | Hash for dedup |
 
 ### Field Design Rationale
 
-- **Plaintext indexed, raw HTML stored**: Indexing plaintext avoids polluting the search index with HTML markup. Storing raw HTML preserves the original page for snippet generation and future rendering (e.g. in the macOS app).
+- **Plaintext indexed, raw HTML in SQLite**: Indexing plaintext avoids polluting the search index with HTML markup. Raw HTML is stored in SQLite for snippet generation and future rendering.
 - **STRING** fields are indexed as single tokens (exact match). Used for URLs, domains, and hashes.
 - **TEXT** fields are tokenized and analyzed. Used for title and content (full-text search).
-- Snippets are generated at search time by converting stored HTML to plaintext (via HTML→Markdown→plaintext pipeline), then extracting a keyword-in-context window.
+- Snippets are generated at search time by fetching stored HTML from SQLite, converting to plaintext (via HTML→Markdown→plaintext pipeline), then extracting a keyword-in-context window.
 
 ## Deduplication Strategy
 
@@ -64,24 +54,17 @@ Before indexing a `PageSnapshot`, the system queries the index for a document wi
 2. If `Count > 0`, skip the document
 3. Otherwise, index it
 
-This prevents re-indexing the same webcache file on subsequent scans.
-
-### Incremental Indexing
-
-The `index` command also uses a `.last-indexed` timestamp file in the index directory. Files with modification times older than this marker are skipped entirely, avoiding unnecessary HTML parsing and conversion.
-
 ## PageSnapshot Struct
 
-The intermediate representation between ingestion and indexing:
+The intermediate representation between the page store and indexing:
 
 ```rust
 pub struct PageSnapshot {
     pub url: String,
     pub title: String,
     pub content: String,     // plaintext for indexing
-    pub html: String,        // raw HTML for storage
     pub domain: String,
-    pub source_hash: String, // MD5 from filename
+    pub source_hash: String,
     pub captured_at: DateTime<Utc>,
 }
 ```

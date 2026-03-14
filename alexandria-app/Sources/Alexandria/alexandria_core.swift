@@ -510,8 +510,6 @@ public protocol AlexandriaEngineProtocol : AnyObject {
     
     func docCount() throws  -> UInt64
     
-    func ingest(sourceDir: String) throws  -> UInt64
-    
     func ingestFromStore(storePath: String) throws  -> UInt64
     
     func pendingStatus(storePath: String) throws  -> PendingStatus
@@ -590,14 +588,6 @@ open func deleteHistory(storePath: String)throws  {try rustCallWithError(FfiConv
 open func docCount()throws  -> UInt64 {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
     uniffi_alexandria_core_fn_method_alexandriaengine_doc_count(self.uniffiClonePointer(),$0
-    )
-})
-}
-    
-open func ingest(sourceDir: String)throws  -> UInt64 {
-    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
-    uniffi_alexandria_core_fn_method_alexandriaengine_ingest(self.uniffiClonePointer(),
-        FfiConverterString.lower(sourceDir),$0
     )
 })
 }
@@ -998,9 +988,6 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_doc_count() != 27746) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_alexandria_core_checksum_method_alexandriaengine_ingest() != 43877) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_ingest_from_store() != 48440) {

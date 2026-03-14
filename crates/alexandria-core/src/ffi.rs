@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::index::{index_snapshots, open_or_create_index, SchemaFields};
-use crate::ingest::{IngestSource, PageSnapshot, RecollFileSource};
+use crate::ingest::PageSnapshot;
 use crate::page_store::PageStore;
 use crate::search::SearchEngine;
 use crate::{extract, filter};
@@ -39,7 +39,6 @@ pub struct PendingStatus {
 pub struct AlexandriaEngine {
     engine: SearchEngine,
     index: tantivy::Index,
-    index_path: String,
 }
 
 #[uniffi::export]
@@ -60,7 +59,6 @@ impl AlexandriaEngine {
         Ok(Arc::new(Self {
             engine,
             index,
-            index_path,
         }))
     }
 
@@ -119,10 +117,6 @@ impl AlexandriaEngine {
             reason: e.to_string(),
         })?;
 
-        // Remove .last-indexed marker so next ingest does a full scan
-        let marker = Path::new(&self.index_path).join(".last-indexed");
-        let _ = std::fs::remove_file(&marker);
-
         // Truncate the SQLite page store
         if !store_path.is_empty() {
             let store =
@@ -151,10 +145,6 @@ impl AlexandriaEngine {
         writer.commit().map_err(|e| AlexandriaError::IngestFailed {
             reason: e.to_string(),
         })?;
-
-        // Remove .last-indexed marker
-        let marker = Path::new(&self.index_path).join(".last-indexed");
-        let _ = std::fs::remove_file(&marker);
 
         // Reset all pages in SQLite to pending
         if store_path.is_empty() {
@@ -256,56 +246,4 @@ impl AlexandriaEngine {
         Ok(indexed as u64)
     }
 
-    pub fn ingest(&self, source_dir: String) -> Result<u64, AlexandriaError> {
-        let source_path = Path::new(&source_dir);
-        if !source_path.is_dir() {
-            return Err(AlexandriaError::IngestFailed {
-                reason: format!("Not a directory: {source_dir}"),
-            });
-        }
-
-        let index_path = Path::new(&self.index_path);
-        let last_indexed = index_path
-            .join(".last-indexed")
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok());
-
-        let mut file_source = RecollFileSource::new(source_path);
-        file_source.modified_since = last_indexed;
-
-        let snapshots = file_source.scan().map_err(|e| AlexandriaError::IngestFailed {
-            reason: e.to_string(),
-        })?;
-
-        if snapshots.is_empty() {
-            return Ok(0);
-        }
-
-        let fields = SchemaFields::from_index(&self.index).map_err(|e| {
-            AlexandriaError::IngestFailed {
-                reason: e.to_string(),
-            }
-        })?;
-        let mut writer = self
-            .index
-            .writer(50_000_000)
-            .map_err(|e| AlexandriaError::IngestFailed {
-                reason: e.to_string(),
-            })?;
-
-        let indexed =
-            index_snapshots(&mut writer, &fields, &self.index, snapshots).map_err(|e| {
-                AlexandriaError::IngestFailed {
-                    reason: e.to_string(),
-                }
-            })?;
-
-        // Update .last-indexed marker
-        let marker = index_path.join(".last-indexed");
-        let _ = std::fs::create_dir_all(index_path);
-        let _ = std::fs::write(&marker, "");
-
-        Ok(indexed as u64)
-    }
 }

@@ -10,21 +10,21 @@ Full-text search for browsing history. Index web pages captured from Firefox and
 
 ```
 +-----------------+     +----------------+     +------------------+
-| Browser Ext.    |---->|  Rust Backend   |<--->|  macOS App       |
-| (Firefox)       |     |  (Tantivy)      |     |  (Swift, C FFI)  |
+| Browser Ext.    |---->|  Rust Backend  |<--->|  macOS App       |
+| (Firefox)       |     |  (Tantivy)     |     |  (Swift, C FFI)  |
 +-----------------+     +----------------+     +------------------+
-                              ^
-                              |
-                        +----------------+
-                        | Recoll         |
-                        | Webcache Files |
-                        +----------------+
+         |                      ^
+         v                      |
+   +----------------+    +-------------+
+   | SQLite         |    | Tantivy     |
+   | Page Store     |--->| Search Index|
+   +----------------+    +-------------+
 ```
 
 - **Backend**: Rust with Tantivy full-text search engine
 - **Frontend**: Swift macOS app communicating via C FFI
-- **Ingestion**: Pluggable sources. Initial: Recoll webcache files. Future: native messaging, HTTP
-- **Power-aware**: Pauses indexing queue in Low Power Mode
+- **Capture**: Firefox extension saves pages to SQLite; background ingestion indexes them into Tantivy
+- **Power-aware**: Pauses indexing on low battery and Low Power Mode
 
 ## Quick Start
 
@@ -32,20 +32,12 @@ Full-text search for browsing history. Index web pages captured from Firefox and
 # Build
 cargo build --workspace
 
-# Index from webcache directory
-cargo run -p alexandria-cli -- index ~/Downloads/webcache
-
 # Search
-cargo run -p alexandria-cli -- search "rust async"
-
-# Search with custom index location
-cargo run -p alexandria-cli -- --index-dir /tmp/my-index index ~/Downloads/webcache
+./target/debug/alex search "rust async"
 
 # Show help
-cargo run -p alexandria-cli -- --help
+./target/debug/alex --help
 ```
-
-Default index location: `./alexandria_index/`
 
 ## Project Structure
 
@@ -54,8 +46,8 @@ alexandria/
   crates/
     alexandria-core/  # Library: ingestion, indexing, search, FFI
     alexandria-cli/   # CLI binary (`alex`)
-  alexandria-app/        # Swift macOS app (future)
-  extension/          # Firefox extension (future)
+  alexandria-app/     # Swift macOS app (SwiftUI + UniFFI)
+  extension/          # Firefox extension
   docs/
     architecture/     # Design docs
     api/              # API reference

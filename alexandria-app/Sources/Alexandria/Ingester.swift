@@ -113,15 +113,6 @@ class Ingester {
                 }
             }
 
-            // Ingest from Recoll webcache (legacy)
-            let webcachePath = self.settings.webcachePath
-            if !webcachePath.isEmpty {
-                let count = self.engine.ingest(sourceDir: webcachePath)
-                if count > 0 {
-                    print("Ingested \(count) new pages from \(webcachePath)")
-                }
-            }
-
             self.isRunning = false
         }
     }

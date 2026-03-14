@@ -8,8 +8,9 @@ The macOS Swift app communicates with `alexandria-core` through [UniFFI](https:/
 
 The FFI surface is defined in `crates/alexandria-core/src/ffi.rs` using UniFFI proc-macros:
 
-- `AlexandriaEngine` — an `#[derive(uniffi::Object)]` wrapping the search engine, index, and index path
+- `AlexandriaEngine` — an `#[derive(uniffi::Object)]` wrapping the search engine and index
 - `AlexandriaSearchResult` — a `#[derive(uniffi::Record)]` (plain data struct) for results
+- `PendingStatus` — a `#[derive(uniffi::Record)]` for pending page counts
 - `AlexandriaError` — a `#[derive(uniffi::Error)]` enum for error propagation
 
 ### Exported API
@@ -20,17 +21,23 @@ impl AlexandriaEngine {
     pub fn open(index_path: String) -> Result<Arc<Self>, AlexandriaError>;
 
     // Full-text search with pagination
-    pub fn search(&self, query: String, limit: u32, offset: u32)
+    pub fn search(&self, query: String, limit: u32, offset: u32, store_path: String)
         -> Result<Vec<AlexandriaSearchResult>, AlexandriaError>;
-
-    // Ingest new pages from a Recoll webcache directory
-    pub fn ingest(&self, source_dir: String) -> Result<u64, AlexandriaError>;
 
     // Return the number of documents in the index
     pub fn doc_count(&self) -> Result<u64, AlexandriaError>;
 
-    // Delete all documents from the index
-    pub fn clear_index(&self) -> Result<(), AlexandriaError>;
+    // Delete all history (Tantivy + SQLite)
+    pub fn delete_history(&self, store_path: String) -> Result<(), AlexandriaError>;
+
+    // Clear Tantivy, reset SQLite indexed_at, re-ingest all pages
+    pub fn reindex(&self, store_path: String) -> Result<u64, AlexandriaError>;
+
+    // Get pending page count and oldest capture time
+    pub fn pending_status(&self, store_path: String) -> Result<PendingStatus, AlexandriaError>;
+
+    // Ingest pending pages from SQLite into Tantivy (up to 500 per call)
+    pub fn ingest_from_store(&self, store_path: String) -> Result<u64, AlexandriaError>;
 }
 ```
 
@@ -51,9 +58,9 @@ pub struct AlexandriaSearchResult {
 
 ```rust
 pub enum AlexandriaError {
-    IndexOpen,
-    SearchFailed,
-    IngestFailed,
+    IndexOpen { reason: String },
+    SearchFailed { reason: String },
+    IngestFailed { reason: String },
 }
 ```
 
@@ -63,7 +70,7 @@ UniFFI generates a native Swift class with automatic memory management:
 
 ```swift
 let engine = try AlexandriaEngine.open(indexPath: "~/.alexandria/index")
-let results = try engine.search(query: "rust ffi", limit: 20, offset: 0)
+let results = try engine.search(query: "rust ffi", limit: 20, offset: 0, storePath: storePath)
 for r in results {
     print(r.title, r.url, r.contentSnippet)
 }
@@ -81,15 +88,11 @@ cargo build -p alexandria-core
 cargo run --bin uniffi-bindgen generate \
     --library target/debug/libalexandria_core.dylib \
     --language swift \
-    --out-dir target/uniffi-swift
+    --out-dir alexandria-app/Sources/Alexandria
 
-# Copy generated files into the Swift package
-cp target/uniffi-swift/alexandria_coreFFI.h \
+# Copy header to module map location
+cp alexandria-app/Sources/Alexandria/alexandria_coreFFI.h \
    alexandria-app/Sources/alexandria_coreFFI/
-cp target/uniffi-swift/alexandria_coreFFI.modulemap \
-   alexandria-app/Sources/alexandria_coreFFI/module.modulemap
-cp target/uniffi-swift/alexandria_core.swift \
-   alexandria-app/Sources/Alexandria/
 ```
 
 ## Swift Package Layout
