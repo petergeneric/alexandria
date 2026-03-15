@@ -43,8 +43,14 @@ fn snapshots_from_pages(pages: &[StoredPage]) -> Vec<PageSnapshot> {
     pages
         .iter()
         .map(|p| {
-            let filtered_html = filter::filter_html(&p.html, &p.domain);
-            let content = extract::html_to_plaintext(&filtered_html);
+            // Content starting with '<' is stored HTML — run filter + plaintext pipeline.
+            // Otherwise it's already plaintext from capture time.
+            let content = if p.html.starts_with('<') {
+                let filtered_html = filter::filter_html(&p.html, &p.domain);
+                extract::html_to_plaintext(&filtered_html)
+            } else {
+                p.html.clone()
+            };
             PageSnapshot {
                 page_id: p.id,
                 url: p.url.clone(),

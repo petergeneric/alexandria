@@ -1,7 +1,8 @@
 //! Full-text search over the Tantivy index.
 //!
 //! Queries are parsed across title (3x boost), domain (2x boost), and content (1x) fields.
-//! Snippets are generated at search time using KWIC extraction from HTML stored in SQLite.
+//! Snippets are generated at search time using KWIC extraction from content stored in SQLite
+//! (either raw HTML for filtered sites, or pre-extracted plaintext for everything else).
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -101,12 +102,18 @@ impl SearchEngine {
                         .unwrap_or_default()
                 });
 
-            // Generate snippet from HTML stored in SQLite
+            // Generate snippet from content stored in SQLite.
+            // Content starting with '<' is HTML — run filter + plaintext pipeline.
+            // Otherwise it's already plaintext from capture time.
             let content_snippet = store
                 .and_then(|s| s.get_html_by_id(page_id as i64).ok().flatten())
-                .map(|html| {
-                    let filtered = filter::filter_html(&html, &domain);
-                    let plaintext = extract::html_to_plaintext(&filtered);
+                .map(|content| {
+                    let plaintext = if content.starts_with('<') {
+                        let filtered = filter::filter_html(&content, &domain);
+                        extract::html_to_plaintext(&filtered)
+                    } else {
+                        content
+                    };
                     kwic_snippet(&plaintext, query_str, 200)
                 })
                 .unwrap_or_default();
@@ -203,6 +210,8 @@ fn kwic_snippet(text: &str, query: &str, max_len: usize) -> String {
         }
     };
 
+    // Ensure end never snaps behind start after word-boundary adjustment
+    let end_char = end_char.max(start_char);
     let byte_start = char_to_byte(start_char);
     let byte_end = char_to_byte(end_char);
 

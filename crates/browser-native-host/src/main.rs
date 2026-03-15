@@ -1,6 +1,7 @@
 mod protocol;
 
 use alexandria_core::extract;
+use alexandria_core::filter;
 use alexandria_core::page_store::PageStore;
 use xxhash_rust::xxh3::xxh3_128;
 use protocol::{ChunkAssembler, HostResponse, IncomingMessage};
@@ -110,7 +111,24 @@ fn handle_snapshot(
     let domain = extract::extract_domain(url);
     let captured_at = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
 
-    match store.insert(url, title, html.as_bytes(), &domain, captured_at, &hash) {
+    // Sites with filter rules: store raw HTML (needs '<' prefix for detection).
+    // All other sites: store plaintext to save space (~74% smaller).
+    let content = if filter::has_filter(&domain) {
+        if html.starts_with('<') {
+            html.to_string()
+        } else {
+            format!("<!doctype html>{html}")
+        }
+    } else {
+        let plaintext = extract::html_to_plaintext(html);
+        if plaintext.starts_with('<') {
+            format!(" {plaintext}")
+        } else {
+            plaintext
+        }
+    };
+
+    match store.insert(url, title, content.as_bytes(), &domain, captured_at, &hash) {
         Ok(()) => HostResponse::ok(),
         Err(e) => HostResponse::error(e.to_string()),
     }

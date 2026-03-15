@@ -5,6 +5,14 @@
 
 use scraper::{Html, Selector};
 
+/// Returns true if this domain has site-specific filter rules.
+pub fn has_filter(domain: &str) -> bool {
+    matches!(
+        domain,
+        "news.ycombinator.com" | "www.reddit.com" | "old.reddit.com" | "bsky.app"
+    )
+}
+
 /// Apply site-specific filtering to HTML based on the page's domain.
 /// Returns cleaned HTML with noise elements removed.
 pub fn filter_html(html: &str, domain: &str) -> String {
