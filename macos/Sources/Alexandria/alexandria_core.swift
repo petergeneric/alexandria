@@ -506,6 +506,8 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol AlexandriaEngineProtocol : AnyObject {
     
+    func clearIngestLog() throws 
+    
     func deleteHistory(storePath: String) throws 
     
     func docCount() throws  -> UInt64
@@ -513,6 +515,8 @@ public protocol AlexandriaEngineProtocol : AnyObject {
     func ingestFromStore(storePath: String) throws  -> UInt64
     
     func pendingStatus(storePath: String) throws  -> PendingStatus
+    
+    func recentIngestFailures(limit: UInt32) throws  -> [IngestLogEntry]
     
     func reindex(storePath: String) throws  -> UInt64
     
@@ -579,6 +583,12 @@ public static func `open`(indexPath: String, appDbPath: String)throws  -> Alexan
     
 
     
+open func clearIngestLog()throws  {try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_clear_ingest_log(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
 open func deleteHistory(storePath: String)throws  {try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
     uniffi_alexandria_core_fn_method_alexandriaengine_delete_history(self.uniffiClonePointer(),
         FfiConverterString.lower(storePath),$0
@@ -605,6 +615,14 @@ open func pendingStatus(storePath: String)throws  -> PendingStatus {
     return try  FfiConverterTypePendingStatus.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
     uniffi_alexandria_core_fn_method_alexandriaengine_pending_status(self.uniffiClonePointer(),
         FfiConverterString.lower(storePath),$0
+    )
+})
+}
+    
+open func recentIngestFailures(limit: UInt32)throws  -> [IngestLogEntry] {
+    return try  FfiConverterSequenceTypeIngestLogEntry.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_recent_ingest_failures(self.uniffiClonePointer(),
+        FfiConverterUInt32.lower(limit),$0
     )
 })
 }
@@ -778,6 +796,104 @@ public func FfiConverterTypeAlexandriaSearchResult_lift(_ buf: RustBuffer) throw
 #endif
 public func FfiConverterTypeAlexandriaSearchResult_lower(_ value: AlexandriaSearchResult) -> RustBuffer {
     return FfiConverterTypeAlexandriaSearchResult.lower(value)
+}
+
+
+public struct IngestLogEntry {
+    public var id: Int64
+    public var timestamp: String
+    public var pageId: Int64
+    public var url: String
+    public var domain: String
+    public var reason: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: Int64, timestamp: String, pageId: Int64, url: String, domain: String, reason: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.pageId = pageId
+        self.url = url
+        self.domain = domain
+        self.reason = reason
+    }
+}
+
+
+
+extension IngestLogEntry: Equatable, Hashable {
+    public static func ==(lhs: IngestLogEntry, rhs: IngestLogEntry) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.timestamp != rhs.timestamp {
+            return false
+        }
+        if lhs.pageId != rhs.pageId {
+            return false
+        }
+        if lhs.url != rhs.url {
+            return false
+        }
+        if lhs.domain != rhs.domain {
+            return false
+        }
+        if lhs.reason != rhs.reason {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(timestamp)
+        hasher.combine(pageId)
+        hasher.combine(url)
+        hasher.combine(domain)
+        hasher.combine(reason)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeIngestLogEntry: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IngestLogEntry {
+        return
+            try IngestLogEntry(
+                id: FfiConverterInt64.read(from: &buf), 
+                timestamp: FfiConverterString.read(from: &buf), 
+                pageId: FfiConverterInt64.read(from: &buf), 
+                url: FfiConverterString.read(from: &buf), 
+                domain: FfiConverterString.read(from: &buf), 
+                reason: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: IngestLogEntry, into buf: inout [UInt8]) {
+        FfiConverterInt64.write(value.id, into: &buf)
+        FfiConverterString.write(value.timestamp, into: &buf)
+        FfiConverterInt64.write(value.pageId, into: &buf)
+        FfiConverterString.write(value.url, into: &buf)
+        FfiConverterString.write(value.domain, into: &buf)
+        FfiConverterString.write(value.reason, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIngestLogEntry_lift(_ buf: RustBuffer) throws -> IngestLogEntry {
+    return try FfiConverterTypeIngestLogEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIngestLogEntry_lower(_ value: IngestLogEntry) -> RustBuffer {
+    return FfiConverterTypeIngestLogEntry.lower(value)
 }
 
 
@@ -970,6 +1086,31 @@ fileprivate struct FfiConverterSequenceTypeAlexandriaSearchResult: FfiConverterR
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeIngestLogEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [IngestLogEntry]
+
+    public static func write(_ value: [IngestLogEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeIngestLogEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [IngestLogEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [IngestLogEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeIngestLogEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
@@ -985,6 +1126,9 @@ private var initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_clear_ingest_log() != 29108) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_delete_history() != 511) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -995,6 +1139,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_pending_status() != 46783) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_recent_ingest_failures() != 11530) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_reindex() != 3729) {

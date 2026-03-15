@@ -50,6 +50,15 @@ class SearchEngineWrapper {
         return Int(count)
     }
 
+    func recentIngestFailures(limit: Int = 100) -> [IngestLogEntry] {
+        guard let entries = try? engine.recentIngestFailures(limit: UInt32(limit)) else { return [] }
+        return entries
+    }
+
+    func clearIngestLog() {
+        _ = try? engine.clearIngestLog()
+    }
+
     func search(query: String, limit: Int = 20, offset: Int = 0, storePath: String = "") -> [SearchResult] {
         guard !query.isEmpty else { return [] }
 

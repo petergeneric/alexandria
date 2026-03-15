@@ -5,6 +5,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var searchPanel: SearchPanel?
     private var settingsWindow: NSWindow?
+    private var logWindow: NSWindow?
 
     private var ingester: Ingester?
     private var engine: SearchEngineWrapper?
@@ -77,6 +78,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
+
+        let failureCount = engine?.recentIngestFailures().count ?? 0
+        if failureCount > 0 {
+            let item = NSMenuItem(
+                title: "\(failureCount) indexing failure\(failureCount == 1 ? "" : "s")",
+                action: #selector(openIngestLog),
+                keyEquivalent: ""
+            )
+            item.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "warning")
+            menu.addItem(item)
+            menu.addItem(NSMenuItem.separator())
+        }
+
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit Alexandria", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
@@ -103,6 +117,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         searchPanel?.close()
         settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func openIngestLog() {
+        if logWindow == nil {
+            let hostingView = NSHostingView(rootView: IngestLogView(engine: engine))
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 640, height: 360),
+                styleMask: [.titled, .closable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Indexing Failures"
+            window.isReleasedWhenClosed = false
+            window.hidesOnDeactivate = true
+            window.contentView = hostingView
+            window.center()
+            logWindow = window
+        } else {
+            // Refresh the view with latest data
+            logWindow?.contentView = NSHostingView(rootView: IngestLogView(engine: engine))
+        }
+        searchPanel?.close()
+        logWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
