@@ -32,7 +32,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Set up shared engine and background ingester
         let indexPath = SearchViewModel.resolveIndexPath()
-        engine = SearchEngineWrapper(indexPath: indexPath)
+        engine = SearchEngineWrapper(indexPath: indexPath, appDbPath: AppSettings.defaultAppDbPath)
         if let engine = engine {
             ingester = Ingester(engine: engine)
             // Ingest on launch

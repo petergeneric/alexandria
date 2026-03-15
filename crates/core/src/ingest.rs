@@ -1,6 +1,5 @@
 //! Core types for page snapshots.
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// A web page snapshot ready for Tantivy indexing.
@@ -9,11 +8,11 @@ use serde::{Deserialize, Serialize};
 /// converting to plaintext via the HTML → Markdown → plaintext pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageSnapshot {
+    pub page_id: i64,
     pub url: String,
     pub title: String,
     /// Plaintext for search indexing
     pub content: String,
     pub domain: String,
-    pub source_hash: String,
-    pub captured_at: DateTime<Utc>,
+    pub captured_at: i64,
 }

@@ -2,8 +2,9 @@ mod protocol;
 
 use alexandria_core::extract;
 use alexandria_core::page_store::PageStore;
-use md5::{Digest, Md5};
+use xxhash_rust::xxh3::xxh3_128;
 use protocol::{ChunkAssembler, HostResponse, IncomingMessage};
+use std::collections::{HashSet, VecDeque};
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
@@ -18,10 +19,53 @@ fn dirs_base() -> PathBuf {
         .join("Library/Application Support/works.peter.alexandria")
 }
 
-fn md5_hex(input: &str) -> String {
-    let mut hasher = Md5::new();
-    hasher.update(input.as_bytes());
-    format!("{:x}", hasher.finalize())
+fn content_hash(input: &[u8]) -> [u8; 16] {
+    xxh3_128(input).to_le_bytes()
+}
+
+struct DedupCache {
+    ring: VecDeque<[u8; 16]>,
+    set: HashSet<[u8; 16]>,
+    capacity: usize,
+}
+
+impl DedupCache {
+    fn new(capacity: usize) -> Self {
+        Self {
+            ring: VecDeque::with_capacity(capacity),
+            set: HashSet::with_capacity(capacity),
+            capacity,
+        }
+    }
+
+    /// Populate cache from existing hashes (oldest first).
+    fn populate(&mut self, hashes: Vec<[u8; 16]>) {
+        for hash in hashes {
+            if self.ring.len() >= self.capacity {
+                self.ring.pop_front();
+            }
+            self.ring.push_back(hash);
+            self.set.insert(hash);
+        }
+    }
+
+    /// Returns true if the hash was already in the cache (duplicate).
+    /// If not, inserts it and returns false.
+    fn check_and_insert(&mut self, hash: [u8; 16]) -> bool {
+        if self.set.contains(&hash) {
+            return true;
+        }
+        if self.ring.len() >= self.capacity {
+            self.ring.pop_front();
+        }
+        self.ring.push_back(hash);
+        self.set.insert(hash);
+        // Rebuild set from ring when it grows too large from stale entries
+        if self.set.len() > self.capacity * 2 {
+            self.set = self.ring.iter().copied().collect();
+        }
+        false
+    }
 }
 
 fn read_message(stdin: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
@@ -51,16 +95,22 @@ fn write_message(stdout: &mut impl Write, response: &HostResponse) -> io::Result
 
 fn handle_snapshot(
     store: &PageStore,
+    dedup: &mut DedupCache,
     url: &str,
     title: &str,
     html: &str,
     timestamp: Option<i64>,
 ) -> HostResponse {
-    let source_hash = md5_hex(url);
+    // Dedup on page content — same URL may produce different HTML over time
+    let hash = content_hash(html.as_bytes());
+    if dedup.check_and_insert(hash) {
+        return HostResponse::ok();
+    }
+
     let domain = extract::extract_domain(url);
     let captured_at = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
 
-    match store.upsert(url, title, html.as_bytes(), &domain, &source_hash, captured_at) {
+    match store.insert(url, title, html.as_bytes(), &domain, captured_at, &hash) {
         Ok(()) => HostResponse::ok(),
         Err(e) => HostResponse::error(e.to_string()),
     }
@@ -85,6 +135,15 @@ fn main() {
     };
 
     tracing::info!("Native host started, store at {}", db_path.display());
+
+    let mut dedup = DedupCache::new(1000);
+    match store.recent_content_hashes(1000) {
+        Ok(hashes) => {
+            tracing::info!("Loaded {} content hashes from store", hashes.len());
+            dedup.populate(hashes);
+        }
+        Err(e) => tracing::warn!("Failed to load content hashes: {e}"),
+    }
 
     let mut stdin = io::stdin().lock();
     let mut stdout = io::stdout().lock();
@@ -116,7 +175,7 @@ fn main() {
                 html,
                 timestamp,
                 ..
-            } => handle_snapshot(&store, &url, &title, &html, timestamp),
+            } => handle_snapshot(&store, &mut dedup, &url, &title, &html, timestamp),
             IncomingMessage::Chunk {
                 id,
                 seq,
@@ -125,7 +184,7 @@ fn main() {
                 meta,
             } => match assembler.add_chunk(id, seq, total, data, meta) {
                 Ok(Some((html, meta))) => {
-                    handle_snapshot(&store, &meta.url, &meta.title, &html, meta.timestamp)
+                    handle_snapshot(&store, &mut dedup, &meta.url, &meta.title, &html, meta.timestamp)
                 }
                 Ok(None) => HostResponse::ok(),
                 Err(e) => HostResponse::error(e),

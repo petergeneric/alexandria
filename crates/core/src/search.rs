@@ -89,11 +89,10 @@ impl SearchEngine {
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
-            let source_hash = doc
-                .get_first(self.fields.source_hash)
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
+            let page_id = doc
+                .get_first(self.fields.page_id)
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             let visited_at = doc
                 .get_first(self.fields.visited_at)
                 .and_then(|v| v.as_datetime())
@@ -104,7 +103,7 @@ impl SearchEngine {
 
             // Generate snippet from HTML stored in SQLite
             let content_snippet = store
-                .and_then(|s| s.get_html(&source_hash).ok().flatten())
+                .and_then(|s| s.get_html_by_id(page_id as i64).ok().flatten())
                 .map(|html| {
                     let filtered = filter::filter_html(&html, &domain);
                     let plaintext = extract::html_to_plaintext(&filtered);

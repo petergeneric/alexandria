@@ -17,13 +17,14 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 crossbeam-channel = { workspace = true }
-md-5 = { workspace = true }
 chrono = { workspace = true }
 url = { workspace = true }
 scraper = { workspace = true }
 uniffi = { workspace = true }
 rusqlite = { workspace = true }
+xxhash-rust = { workspace = true }
 zstd = { workspace = true }
+
 
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }

@@ -568,10 +568,11 @@ open class AlexandriaEngine:
     }
 
     
-public static func `open`(indexPath: String)throws  -> AlexandriaEngine {
+public static func `open`(indexPath: String, appDbPath: String)throws  -> AlexandriaEngine {
     return try  FfiConverterTypeAlexandriaEngine.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
     uniffi_alexandria_core_fn_constructor_alexandriaengine_open(
-        FfiConverterString.lower(indexPath),$0
+        FfiConverterString.lower(indexPath),
+        FfiConverterString.lower(appDbPath),$0
     )
 })
 }
@@ -1002,7 +1003,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_search() != 4659) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_alexandria_core_checksum_constructor_alexandriaengine_open() != 37369) {
+    if (uniffi_alexandria_core_checksum_constructor_alexandriaengine_open() != 48129) {
         return InitializationResult.apiChecksumMismatch
     }
 

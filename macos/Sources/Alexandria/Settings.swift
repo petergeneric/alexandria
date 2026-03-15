@@ -8,6 +8,11 @@ class AppSettings: ObservableObject {
         return appSupport.appendingPathComponent("works.peter.alexandria/pages.db").path
     }()
 
+    static let defaultAppDbPath: String = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("works.peter.alexandria/app.db").path
+    }()
+
     private enum Keys {
         static let storePath = "storePath"
         static let indexOnBattery = "indexOnBattery"

@@ -1,5 +1,6 @@
 uniffi::setup_scaffolding!();
 
+pub mod app_db;
 pub mod extract;
 pub mod ffi;
 pub mod filter;

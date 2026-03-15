@@ -82,7 +82,7 @@ class SearchViewModel: ObservableObject {
 
     init() {
         let indexPath = Self.resolveIndexPath()
-        engine = SearchEngineWrapper(indexPath: indexPath)
+        engine = SearchEngineWrapper(indexPath: indexPath, appDbPath: AppSettings.defaultAppDbPath)
         storePath = AppSettings.shared.storePath
         if engine == nil {
             print("Warning: could not open index at \(indexPath)")

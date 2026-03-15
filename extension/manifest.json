@@ -28,7 +28,7 @@
   "content_scripts": [
     {
       "matches": ["*://*/*"],
-      "js": ["md5.js", "rules.js", "content.js"],
+      "js": ["rules.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

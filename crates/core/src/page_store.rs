@@ -1,7 +1,7 @@
 //! SQLite-backed page store for browser extension captures.
 //!
-//! Pages are stored with zstd-compressed HTML and tracked for Tantivy indexing
-//! via an `indexed_at` column (NULL until indexed).
+//! Pages are stored with zstd-compressed HTML. Indexing progress is tracked
+//! via a watermark in the separate `app.db` (see [`crate::app_db`]).
 
 use rusqlite::{params, Connection};
 use std::path::Path;
@@ -16,7 +16,7 @@ pub enum PageStoreError {
 }
 
 pub struct StoredPage {
-    pub source_hash: String,
+    pub id: i64,
     pub url: String,
     pub title: String,
     pub html: String,
@@ -37,48 +37,73 @@ impl PageStore {
         db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")?;
         db.execute_batch(
             "CREATE TABLE IF NOT EXISTS pages (
-                source_hash TEXT PRIMARY KEY,
-                url         TEXT NOT NULL,
-                title       TEXT NOT NULL DEFAULT '',
-                html        BLOB NOT NULL,
-                domain      TEXT NOT NULL DEFAULT '',
-                captured_at INTEGER NOT NULL,
-                indexed_at  INTEGER
+                id            INTEGER PRIMARY KEY,
+                url           TEXT NOT NULL,
+                title         TEXT NOT NULL DEFAULT '',
+                html          BLOB NOT NULL,
+                domain        TEXT NOT NULL DEFAULT '',
+                captured_at   INTEGER NOT NULL,
+                content_hash  BLOB NOT NULL
             );",
         )?;
         Ok(Self { db })
     }
 
-    pub fn upsert(
+    pub fn insert(
         &self,
         url: &str,
         title: &str,
         html: &[u8],
         domain: &str,
-        source_hash: &str,
         captured_at: i64,
+        content_hash: &[u8; 16],
     ) -> Result<(), PageStoreError> {
         let compressed =
             zstd::encode_all(html, 3).map_err(|e| PageStoreError::Compression(e.to_string()))?;
         self.db.execute(
-            "INSERT OR REPLACE INTO pages (source_hash, url, title, html, domain, captured_at, indexed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)",
-            params![source_hash, url, title, compressed, domain, captured_at],
+            "INSERT INTO pages (url, title, html, domain, captured_at, content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![url, title, compressed, domain, captured_at, &content_hash[..]],
         )?;
         Ok(())
     }
 
-    pub fn pending(&self, limit: usize) -> Result<Vec<StoredPage>, PageStoreError> {
+    /// Load content hashes from the most recent `limit` rows, oldest first.
+    pub fn recent_content_hashes(&self, limit: usize) -> Result<Vec<[u8; 16]>, PageStoreError> {
         let mut stmt = self.db.prepare(
-            "SELECT source_hash, url, title, html, domain, captured_at
-             FROM pages WHERE indexed_at IS NULL
-             ORDER BY captured_at
-             LIMIT ?1",
+            "SELECT content_hash FROM (
+                SELECT content_hash, id FROM pages ORDER BY id DESC LIMIT ?1
+            ) ORDER BY id",
         )?;
         let rows = stmt.query_map(params![limit as i64], |row| {
+            let blob: Vec<u8> = row.get(0)?;
+            Ok(blob)
+        })?;
+        let mut hashes = Vec::new();
+        for row in rows {
+            let blob = row?;
+            if let Ok(arr) = <[u8; 16]>::try_from(blob.as_slice()) {
+                hashes.push(arr);
+            }
+        }
+        Ok(hashes)
+    }
+
+    pub fn pages_after(
+        &self,
+        watermark: i64,
+        limit: usize,
+    ) -> Result<Vec<StoredPage>, PageStoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT id, url, title, html, domain, captured_at
+             FROM pages WHERE id > ?1
+             ORDER BY id
+             LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![watermark, limit as i64], |row| {
             let compressed: Vec<u8> = row.get(3)?;
             Ok((
-                row.get::<_, String>(0)?,
+                row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 compressed,
@@ -89,12 +114,12 @@ impl PageStore {
 
         let mut pages = Vec::new();
         for row in rows {
-            let (source_hash, url, title, compressed, domain, captured_at) = row?;
+            let (id, url, title, compressed, domain, captured_at) = row?;
             let html = zstd::decode_all(compressed.as_slice())
                 .map_err(|e| PageStoreError::Compression(e.to_string()))?;
             let html = String::from_utf8_lossy(&html).into_owned();
             pages.push(StoredPage {
-                source_hash,
+                id,
                 url,
                 title,
                 html,
@@ -105,23 +130,25 @@ impl PageStore {
         Ok(pages)
     }
 
-    /// Returns (count, oldest_captured_at) for pending pages, or (0, None) if none.
-    pub fn pending_summary(&self) -> Result<(u64, Option<i64>), PageStoreError> {
+    /// Returns (count, oldest_captured_at) for pages after the watermark, or (0, None) if none.
+    pub fn pages_after_count(
+        &self,
+        watermark: i64,
+    ) -> Result<(u64, Option<i64>), PageStoreError> {
         let mut stmt = self.db.prepare(
-            "SELECT COUNT(*), MIN(captured_at) FROM pages WHERE indexed_at IS NULL",
+            "SELECT COUNT(*), MIN(captured_at) FROM pages WHERE id > ?1",
         )?;
-        let (count, oldest): (u64, Option<i64>) = stmt.query_row([], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?;
-        Ok((count, oldest))
+        let (count, oldest): (i64, Option<i64>) =
+            stmt.query_row(params![watermark], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok((count as u64, oldest))
     }
 
-    /// Look up the raw HTML for a page by its source hash.
-    pub fn get_html(&self, source_hash: &str) -> Result<Option<String>, PageStoreError> {
-        let mut stmt = self.db.prepare(
-            "SELECT html FROM pages WHERE source_hash = ?1",
-        )?;
-        let mut rows = stmt.query(params![source_hash])?;
+    /// Look up the raw HTML for a page by its rowid.
+    pub fn get_html_by_id(&self, id: i64) -> Result<Option<String>, PageStoreError> {
+        let mut stmt = self
+            .db
+            .prepare("SELECT html FROM pages WHERE id = ?1")?;
+        let mut rows = stmt.query(params![id])?;
         match rows.next()? {
             Some(row) => {
                 let compressed: Vec<u8> = row.get(0)?;
@@ -135,35 +162,6 @@ impl PageStore {
 
     pub fn delete_all(&self) -> Result<(), PageStoreError> {
         self.db.execute_batch("DELETE FROM pages")?;
-        Ok(())
-    }
-
-    pub fn reset_indexed(&self) -> Result<(), PageStoreError> {
-        self.db.execute_batch("UPDATE pages SET indexed_at = NULL")?;
-        Ok(())
-    }
-
-    pub fn mark_indexed(&self, source_hash: &str) -> Result<(), PageStoreError> {
-        let now = chrono::Utc::now().timestamp();
-        self.db.execute(
-            "UPDATE pages SET indexed_at = ?1 WHERE source_hash = ?2",
-            params![now, source_hash],
-        )?;
-        Ok(())
-    }
-
-    pub fn mark_indexed_batch(&self, hashes: &[&str]) -> Result<(), PageStoreError> {
-        let now = chrono::Utc::now().timestamp();
-        let tx = self.db.unchecked_transaction()?;
-        {
-            let mut stmt = tx.prepare(
-                "UPDATE pages SET indexed_at = ?1 WHERE source_hash = ?2",
-            )?;
-            for hash in hashes {
-                stmt.execute(params![now, hash])?;
-            }
-        }
-        tx.commit()?;
         Ok(())
     }
 }
@@ -187,69 +185,69 @@ mod tests {
         (path, store)
     }
 
-    #[test]
-    fn test_upsert_and_pending() {
-        let (_path, store) = temp_db();
-        store
-            .upsert(
-                "https://example.com",
-                "Example",
-                b"<html><body>Hello</body></html>",
-                "example.com",
-                "abc123",
-                1000,
-            )
-            .unwrap();
-
-        let pending = store.pending(10).unwrap();
-        assert_eq!(pending.len(), 1);
-        assert_eq!(pending[0].url, "https://example.com");
-        assert_eq!(pending[0].title, "Example");
-        assert_eq!(pending[0].html, "<html><body>Hello</body></html>");
-        assert_eq!(pending[0].source_hash, "abc123");
+    fn hash(data: &[u8]) -> [u8; 16] {
+        xxhash_rust::xxh3::xxh3_128(data).to_le_bytes()
     }
 
     #[test]
-    fn test_mark_indexed() {
+    fn test_insert_and_pages_after() {
         let (_path, store) = temp_db();
+        let html = b"<html><body>Hello</body></html>";
         store
-            .upsert("https://example.com", "Ex", b"<p>hi</p>", "example.com", "h1", 1000)
+            .insert("https://example.com", "Example", html, "example.com", 1000, &hash(html))
             .unwrap();
-        store.mark_indexed("h1").unwrap();
 
-        let pending = store.pending(10).unwrap();
-        assert!(pending.is_empty());
+        let pages = store.pages_after(0, 10).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].url, "https://example.com");
+        assert_eq!(pages[0].title, "Example");
+        assert_eq!(pages[0].html, "<html><body>Hello</body></html>");
+        assert!(pages[0].id > 0);
     }
 
     #[test]
-    fn test_upsert_resets_indexed_at() {
+    fn test_watermark_filtering() {
         let (_path, store) = temp_db();
-        store
-            .upsert("https://example.com", "Ex", b"<p>v1</p>", "example.com", "h1", 1000)
-            .unwrap();
-        store.mark_indexed("h1").unwrap();
-        assert!(store.pending(10).unwrap().is_empty());
+        store.insert("https://a.com", "A", b"a", "a.com", 1000, &hash(b"a")).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", 2000, &hash(b"b")).unwrap();
+        store.insert("https://c.com", "C", b"c", "c.com", 3000, &hash(b"c")).unwrap();
 
-        // Re-upsert same hash resets indexed_at to NULL
-        store
-            .upsert("https://example.com", "Ex v2", b"<p>v2</p>", "example.com", "h1", 2000)
-            .unwrap();
-        let pending = store.pending(10).unwrap();
-        assert_eq!(pending.len(), 1);
-        assert_eq!(pending[0].title, "Ex v2");
+        let all = store.pages_after(0, 10).unwrap();
+        assert_eq!(all.len(), 3);
+
+        let after_first = store.pages_after(all[0].id, 10).unwrap();
+        assert_eq!(after_first.len(), 2);
+        assert_eq!(after_first[0].url, "https://b.com");
     }
 
     #[test]
-    fn test_mark_indexed_batch() {
+    fn test_pages_after_count() {
         let (_path, store) = temp_db();
-        store.upsert("https://a.com", "A", b"a", "a.com", "h1", 1000).unwrap();
-        store.upsert("https://b.com", "B", b"b", "b.com", "h2", 2000).unwrap();
-        store.upsert("https://c.com", "C", b"c", "c.com", "h3", 3000).unwrap();
+        store.insert("https://a.com", "A", b"a", "a.com", 1000, &hash(b"a")).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", 2000, &hash(b"b")).unwrap();
 
-        store.mark_indexed_batch(&["h1", "h3"]).unwrap();
-        let pending = store.pending(10).unwrap();
-        assert_eq!(pending.len(), 1);
-        assert_eq!(pending[0].source_hash, "h2");
+        let (count, oldest) = store.pages_after_count(0).unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(oldest, Some(1000));
+
+        let all = store.pages_after(0, 10).unwrap();
+        let (count, _) = store.pages_after_count(all[1].id).unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_get_html_by_id() {
+        let (_path, store) = temp_db();
+        store
+            .insert("https://example.com", "Ex", b"<p>hi</p>", "example.com", 1000, &hash(b"<p>hi</p>"))
+            .unwrap();
+
+        let pages = store.pages_after(0, 10).unwrap();
+        let html = store.get_html_by_id(pages[0].id).unwrap();
+        assert_eq!(html, Some("<p>hi</p>".to_string()));
+
+        let missing = store.get_html_by_id(99999).unwrap();
+        assert!(missing.is_none());
     }
 
     #[test]
@@ -257,9 +255,31 @@ mod tests {
         let (_path, store) = temp_db();
         let html = "<html>".repeat(10000);
         store
-            .upsert("https://big.com", "Big", html.as_bytes(), "big.com", "big", 1000)
+            .insert("https://big.com", "Big", html.as_bytes(), "big.com", 1000, &hash(html.as_bytes()))
             .unwrap();
-        let pending = store.pending(10).unwrap();
-        assert_eq!(pending[0].html, html);
+        let pages = store.pages_after(0, 10).unwrap();
+        assert_eq!(pages[0].html, html);
+    }
+
+    #[test]
+    fn test_recent_content_hashes() {
+        let (_path, store) = temp_db();
+        let h1 = hash(b"a");
+        let h2 = hash(b"b");
+        let h3 = hash(b"c");
+        store.insert("https://a.com", "A", b"a", "a.com", 1000, &h1).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", 2000, &h2).unwrap();
+        store.insert("https://c.com", "C", b"c", "c.com", 3000, &h3).unwrap();
+
+        // Fetch last 2 — should be b and c in insertion order
+        let hashes = store.recent_content_hashes(2).unwrap();
+        assert_eq!(hashes.len(), 2);
+        assert_eq!(hashes[0], h2);
+        assert_eq!(hashes[1], h3);
+
+        // Fetch all
+        let hashes = store.recent_content_hashes(10).unwrap();
+        assert_eq!(hashes.len(), 3);
+        assert_eq!(hashes[0], h1);
     }
 }

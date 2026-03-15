@@ -13,8 +13,8 @@ struct SearchResult: Identifiable {
 class SearchEngineWrapper {
     private let engine: AlexandriaEngine
 
-    init?(indexPath: String) {
-        guard let eng = try? AlexandriaEngine.open(indexPath: indexPath) else {
+    init?(indexPath: String, appDbPath: String) {
+        guard let eng = try? AlexandriaEngine.open(indexPath: indexPath, appDbPath: appDbPath) else {
             return nil
         }
         engine = eng

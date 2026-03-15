@@ -4,11 +4,12 @@
 //! and index management via proc-macro-generated Swift bindings.
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use crate::app_db::AppDb;
 use crate::index::{index_snapshots, open_or_create_index, SchemaFields};
 use crate::ingest::PageSnapshot;
-use crate::page_store::PageStore;
+use crate::page_store::{PageStore, StoredPage};
 use crate::search::SearchEngine;
 use crate::{extract, filter};
 
@@ -38,16 +39,35 @@ pub struct PendingStatus {
     pub oldest_captured_at_secs: Option<i64>,
 }
 
+fn snapshots_from_pages(pages: &[StoredPage]) -> Vec<PageSnapshot> {
+    pages
+        .iter()
+        .map(|p| {
+            let filtered_html = filter::filter_html(&p.html, &p.domain);
+            let content = extract::html_to_plaintext(&filtered_html);
+            PageSnapshot {
+                page_id: p.id,
+                url: p.url.clone(),
+                title: p.title.clone(),
+                content,
+                domain: p.domain.clone(),
+                captured_at: p.captured_at,
+            }
+        })
+        .collect()
+}
+
 #[derive(uniffi::Object)]
 pub struct AlexandriaEngine {
     engine: SearchEngine,
     index: tantivy::Index,
+    app_db: Mutex<AppDb>,
 }
 
 #[uniffi::export]
 impl AlexandriaEngine {
     #[uniffi::constructor]
-    pub fn open(index_path: String) -> Result<Arc<Self>, AlexandriaError> {
+    pub fn open(index_path: String, app_db_path: String) -> Result<Arc<Self>, AlexandriaError> {
         let index = open_or_create_index(Path::new(&index_path)).map_err(|e| {
             AlexandriaError::IndexOpen {
                 reason: e.to_string(),
@@ -59,9 +79,17 @@ impl AlexandriaEngine {
                 reason: e.to_string(),
             }
         })?;
+
+        let app_db = AppDb::open(Path::new(&app_db_path)).map_err(|e| {
+            AlexandriaError::IndexOpen {
+                reason: e.to_string(),
+            }
+        })?;
+
         Ok(Arc::new(Self {
             engine,
             index,
+            app_db: Mutex::new(app_db),
         }))
     }
 
@@ -120,7 +148,6 @@ impl AlexandriaEngine {
             reason: e.to_string(),
         })?;
 
-        // Truncate the SQLite page store
         if !store_path.is_empty() {
             let store =
                 PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
@@ -131,11 +158,15 @@ impl AlexandriaEngine {
             })?;
         }
 
+        let app_db = self.app_db.lock().unwrap();
+        app_db.set_watermark(0).map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
         Ok(())
     }
 
     pub fn reindex(&self, store_path: String) -> Result<u64, AlexandriaError> {
-        // Reset all pages in SQLite to pending
         if store_path.is_empty() {
             return Ok(0);
         }
@@ -143,11 +174,8 @@ impl AlexandriaEngine {
             PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
-        store.reset_indexed().map_err(|e| AlexandriaError::IngestFailed {
-            reason: e.to_string(),
-        })?;
+        let app_db = self.app_db.lock().unwrap();
 
-        // Clear the Tantivy index and re-ingest using a single writer
         let fields = SchemaFields::from_index(&self.index).map_err(|e| {
             AlexandriaError::IngestFailed {
                 reason: e.to_string(),
@@ -166,47 +194,34 @@ impl AlexandriaEngine {
             reason: e.to_string(),
         })?;
 
-        // Re-ingest everything in batches using the same writer
+        app_db.set_watermark(0).map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
         let mut total = 0u64;
+        let mut watermark: i64 = 0;
         loop {
-            let pages = store.pending(500).map_err(|e| AlexandriaError::IngestFailed {
+            let pages = store.pages_after(watermark, 500).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
             if pages.is_empty() {
                 break;
             }
 
-            let snapshots: Vec<PageSnapshot> = pages
-                .iter()
-                .map(|p| {
-                    let filtered_html = filter::filter_html(&p.html, &p.domain);
-                    let content = extract::html_to_plaintext(&filtered_html);
-                    let captured_at =
-                        chrono::DateTime::from_timestamp(p.captured_at, 0).unwrap_or_else(chrono::Utc::now);
-                    PageSnapshot {
-                        url: p.url.clone(),
-                        title: p.title.clone(),
-                        content,
-                        domain: p.domain.clone(),
-                        source_hash: p.source_hash.clone(),
-                        captured_at,
-                    }
-                })
-                .collect();
+            let max_id = pages.iter().map(|p| p.id).max().unwrap_or(watermark);
+            let snapshots = snapshots_from_pages(&pages);
 
-            let hashes: Vec<&str> = pages.iter().map(|p| p.source_hash.as_str()).collect();
             let indexed =
-                index_snapshots(&mut writer, &fields, &self.index, snapshots).map_err(|e| {
+                index_snapshots(&mut writer, &fields, snapshots).map_err(|e| {
                     AlexandriaError::IngestFailed {
                         reason: e.to_string(),
                     }
                 })?;
 
-            store
-                .mark_indexed_batch(&hashes)
-                .map_err(|e| AlexandriaError::IngestFailed {
-                    reason: e.to_string(),
-                })?;
+            watermark = max_id;
+            app_db.set_watermark(watermark).map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
 
             total += indexed as u64;
         }
@@ -218,7 +233,11 @@ impl AlexandriaEngine {
             PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
-        let (count, oldest) = store.pending_summary().map_err(|e| AlexandriaError::IngestFailed {
+        let app_db = self.app_db.lock().unwrap();
+        let watermark = app_db.get_watermark().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+        let (count, oldest) = store.pages_after_count(watermark).map_err(|e| AlexandriaError::IngestFailed {
             reason: e.to_string(),
         })?;
         Ok(PendingStatus {
@@ -232,8 +251,13 @@ impl AlexandriaEngine {
             PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
+        let app_db = self.app_db.lock().unwrap();
 
-        let pages = store.pending(500).map_err(|e| AlexandriaError::IngestFailed {
+        let watermark = app_db.get_watermark().map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
+        let pages = store.pages_after(watermark, 500).map_err(|e| AlexandriaError::IngestFailed {
             reason: e.to_string(),
         })?;
 
@@ -241,23 +265,8 @@ impl AlexandriaEngine {
             return Ok(0);
         }
 
-        let snapshots: Vec<PageSnapshot> = pages
-            .iter()
-            .map(|p| {
-                let filtered_html = filter::filter_html(&p.html, &p.domain);
-                let content = extract::html_to_plaintext(&filtered_html);
-                let captured_at =
-                    chrono::DateTime::from_timestamp(p.captured_at, 0).unwrap_or_else(chrono::Utc::now);
-                PageSnapshot {
-                    url: p.url.clone(),
-                    title: p.title.clone(),
-                    content,
-                    domain: p.domain.clone(),
-                    source_hash: p.source_hash.clone(),
-                    captured_at,
-                }
-            })
-            .collect();
+        let max_id = pages.iter().map(|p| p.id).max().unwrap_or(watermark);
+        let snapshots = snapshots_from_pages(&pages);
 
         let fields = SchemaFields::from_index(&self.index).map_err(|e| {
             AlexandriaError::IngestFailed {
@@ -271,22 +280,17 @@ impl AlexandriaEngine {
                 reason: e.to_string(),
             })?;
 
-        let hashes: Vec<&str> = pages.iter().map(|p| p.source_hash.as_str()).collect();
-
         let indexed =
-            index_snapshots(&mut writer, &fields, &self.index, snapshots).map_err(|e| {
+            index_snapshots(&mut writer, &fields, snapshots).map_err(|e| {
                 AlexandriaError::IngestFailed {
                     reason: e.to_string(),
                 }
             })?;
 
-        store
-            .mark_indexed_batch(&hashes)
-            .map_err(|e| AlexandriaError::IngestFailed {
-                reason: e.to_string(),
-            })?;
+        app_db.set_watermark(max_id).map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
 
         Ok(indexed as u64)
     }
-
 }
