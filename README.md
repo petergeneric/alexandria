@@ -8,23 +8,16 @@ Full-text search for browsing history. Index web pages captured from Firefox and
 
 ## Architecture
 
-```
-+-----------------+     +----------------+     +------------------+
-| Browser Ext.    |---->|  Rust Backend  |<--->|  macOS App       |
-| (Firefox)       |     |  (Tantivy)     |     |  (Swift, C FFI)  |
-+-----------------+     +----------------+     +------------------+
-         |                      ^
-         v                      |
-   +----------------+    +-------------+
-   | SQLite         |    | Tantivy     |
-   | Page Store     |--->| Search Index|
-   +----------------+    +-------------+
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="Architecture diagram" width="720">
+</p>
 
-- **Backend**: Rust with Tantivy full-text search engine
-- **Frontend**: Swift macOS app communicating via C FFI
-- **Capture**: Firefox extension saves pages to SQLite; background ingestion indexes them into Tantivy
-- **Power-aware**: Pauses indexing on low battery and Low Power Mode
+- **Capture**: Firefox extension grabs page HTML and sends it via native messaging to a Rust host that deduplicates and stores it in `pages.db` (zstd-compressed)
+- **Ingestion**: Core library reads stored pages, filters boilerplate (site-specific CSS selectors), converts HTML to plaintext, and batch-indexes into Tantivy
+- **Search**: Queries run against the Tantivy index with field boosting (title 3x, domain 2x, content 1x); snippets are generated at search time via KWIC
+- **Frontends**: macOS app (SwiftUI + UniFFI) and CLI (`alex`) both use the core library
+- **Power-aware**: macOS app pauses indexing on low battery and Low Power Mode
+- **Shared blocklist**: `blocklist.json` filters sensitive URLs in both the extension and the indexer
 
 ## Quick Start
 
