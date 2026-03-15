@@ -17,6 +17,7 @@ crossbeam-channel = "0.5"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 chrono = { version = "0.4", features = ["serde"] }
 url = "2"
+addr = "0.15"
 scraper = "0.25"
 uniffi = { version = "0.28", features = ["cli"] }
 rusqlite = { version = "0.38", features = ["bundled"] }

@@ -773,16 +773,18 @@ public struct AlexandriaSearchResult {
     public var title: String
     public var contentSnippet: String
     public var domain: String
+    public var siteGroup: String
     public var score: Float
     public var visitedAtSecs: Int64?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(url: String, title: String, contentSnippet: String, domain: String, score: Float, visitedAtSecs: Int64?) {
+    public init(url: String, title: String, contentSnippet: String, domain: String, siteGroup: String, score: Float, visitedAtSecs: Int64?) {
         self.url = url
         self.title = title
         self.contentSnippet = contentSnippet
         self.domain = domain
+        self.siteGroup = siteGroup
         self.score = score
         self.visitedAtSecs = visitedAtSecs
     }
@@ -804,6 +806,9 @@ extension AlexandriaSearchResult: Equatable, Hashable {
         if lhs.domain != rhs.domain {
             return false
         }
+        if lhs.siteGroup != rhs.siteGroup {
+            return false
+        }
         if lhs.score != rhs.score {
             return false
         }
@@ -818,6 +823,7 @@ extension AlexandriaSearchResult: Equatable, Hashable {
         hasher.combine(title)
         hasher.combine(contentSnippet)
         hasher.combine(domain)
+        hasher.combine(siteGroup)
         hasher.combine(score)
         hasher.combine(visitedAtSecs)
     }
@@ -835,6 +841,7 @@ public struct FfiConverterTypeAlexandriaSearchResult: FfiConverterRustBuffer {
                 title: FfiConverterString.read(from: &buf), 
                 contentSnippet: FfiConverterString.read(from: &buf), 
                 domain: FfiConverterString.read(from: &buf), 
+                siteGroup: FfiConverterString.read(from: &buf), 
                 score: FfiConverterFloat.read(from: &buf), 
                 visitedAtSecs: FfiConverterOptionInt64.read(from: &buf)
         )
@@ -845,6 +852,7 @@ public struct FfiConverterTypeAlexandriaSearchResult: FfiConverterRustBuffer {
         FfiConverterString.write(value.title, into: &buf)
         FfiConverterString.write(value.contentSnippet, into: &buf)
         FfiConverterString.write(value.domain, into: &buf)
+        FfiConverterString.write(value.siteGroup, into: &buf)
         FfiConverterFloat.write(value.score, into: &buf)
         FfiConverterOptionInt64.write(value.visitedAtSecs, into: &buf)
     }
@@ -1277,14 +1285,14 @@ public func FfiConverterTypeSummaryCounts_lower(_ value: SummaryCounts) -> RustB
 
 
 public struct TopDomain {
-    public var domain: String
+    public var siteGroup: String
     public var visitCount: Int64
     public var totalBytes: Int64
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(domain: String, visitCount: Int64, totalBytes: Int64) {
-        self.domain = domain
+    public init(siteGroup: String, visitCount: Int64, totalBytes: Int64) {
+        self.siteGroup = siteGroup
         self.visitCount = visitCount
         self.totalBytes = totalBytes
     }
@@ -1294,7 +1302,7 @@ public struct TopDomain {
 
 extension TopDomain: Equatable, Hashable {
     public static func ==(lhs: TopDomain, rhs: TopDomain) -> Bool {
-        if lhs.domain != rhs.domain {
+        if lhs.siteGroup != rhs.siteGroup {
             return false
         }
         if lhs.visitCount != rhs.visitCount {
@@ -1307,7 +1315,7 @@ extension TopDomain: Equatable, Hashable {
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(domain)
+        hasher.combine(siteGroup)
         hasher.combine(visitCount)
         hasher.combine(totalBytes)
     }
@@ -1321,14 +1329,14 @@ public struct FfiConverterTypeTopDomain: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TopDomain {
         return
             try TopDomain(
-                domain: FfiConverterString.read(from: &buf), 
+                siteGroup: FfiConverterString.read(from: &buf), 
                 visitCount: FfiConverterInt64.read(from: &buf), 
                 totalBytes: FfiConverterInt64.read(from: &buf)
         )
     }
 
     public static func write(_ value: TopDomain, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.domain, into: &buf)
+        FfiConverterString.write(value.siteGroup, into: &buf)
         FfiConverterInt64.write(value.visitCount, into: &buf)
         FfiConverterInt64.write(value.totalBytes, into: &buf)
     }

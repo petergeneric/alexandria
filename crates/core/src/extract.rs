@@ -97,10 +97,27 @@ fn extract_attr_value(tag: &str, attr: &str) -> Option<String> {
     if url.starts_with("http") { Some(url.to_string()) } else { None }
 }
 
-/// Extract the domain from a URL.
+/// Extract the domain from a URL, stripping any `www.` prefix.
 pub fn extract_domain(url_str: &str) -> String {
     url::Url::parse(url_str)
         .ok()
         .and_then(|u| u.host_str().map(|h| h.to_string()))
+        .map(|h| h.strip_prefix("www.").unwrap_or(&h).to_string())
         .unwrap_or_default()
+}
+
+/// Extract the PSL-based registrable domain (eTLD+1) for rollup grouping.
+/// Falls back to `extract_domain()` when PSL lookup fails (IPs, localhost).
+pub fn extract_site_group(url_str: &str) -> String {
+    let domain = extract_domain(url_str);
+    if domain.is_empty() {
+        return domain;
+    }
+    match addr::parse_domain_name(&domain) {
+        Ok(parsed) => parsed
+            .root()
+            .map(|r| r.to_string())
+            .unwrap_or_else(|| domain.clone()),
+        Err(_) => domain,
+    }
 }

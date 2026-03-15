@@ -14,5 +14,6 @@ pub struct PageSnapshot {
     /// Plaintext for search indexing
     pub content: String,
     pub domain: String,
+    pub site_group: String,
     pub captured_at: i64,
 }

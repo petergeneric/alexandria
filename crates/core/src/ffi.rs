@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use crate::app_db::AppDb;
-use crate::index::{index_snapshots, open_or_create_index, SchemaFields};
+use crate::index::{index_snapshots, open_or_create_index, SchemaFields, SCHEMA_REVISION};
 use crate::ingest::PageSnapshot;
 use crate::page_store::{PageStore, StoredPage};
 use crate::search::SearchEngine;
@@ -29,6 +29,7 @@ pub struct AlexandriaSearchResult {
     pub title: String,
     pub content_snippet: String,
     pub domain: String,
+    pub site_group: String,
     pub score: f32,
     pub visited_at_secs: Option<i64>,
 }
@@ -66,7 +67,7 @@ pub struct DayHourCell {
 
 #[derive(uniffi::Record)]
 pub struct TopDomain {
-    pub domain: String,
+    pub site_group: String,
     pub visit_count: i64,
     pub total_bytes: i64,
 }
@@ -135,6 +136,7 @@ fn snapshots_from_pages(pages: &[StoredPage]) -> ConvertedPages {
             title: p.title.clone(),
             content,
             domain: p.domain.clone(),
+            site_group: p.site_group.clone(),
             captured_at: p.captured_at,
         });
     }
@@ -171,6 +173,22 @@ impl AlexandriaEngine {
             }
         })?;
 
+        // Schema upgrade: reset watermark so the ingester reindexes everything
+        let stored_rev = app_db.get_schema_revision().unwrap_or(None);
+        if stored_rev != Some(SCHEMA_REVISION) {
+            tracing::info!(
+                old = ?stored_rev,
+                new = SCHEMA_REVISION,
+                "Schema revision changed, resetting watermark for reindex"
+            );
+            app_db.set_watermark(0).map_err(|e| AlexandriaError::IndexOpen {
+                reason: e.to_string(),
+            })?;
+            app_db.set_schema_revision(SCHEMA_REVISION).map_err(|e| AlexandriaError::IndexOpen {
+                reason: e.to_string(),
+            })?;
+        }
+
         Ok(Arc::new(Self {
             engine,
             index,
@@ -205,6 +223,7 @@ impl AlexandriaEngine {
                 title: r.title,
                 content_snippet: r.content_snippet,
                 domain: r.domain,
+                site_group: r.site_group,
                 score: r.score,
                 visited_at_secs: r.visited_at.map(|dt| dt.timestamp()),
             })
@@ -314,6 +333,11 @@ impl AlexandriaEngine {
 
             total += indexed as u64;
         }
+
+        app_db.set_schema_revision(SCHEMA_REVISION).map_err(|e| AlexandriaError::IngestFailed {
+            reason: e.to_string(),
+        })?;
+
         Ok(total)
     }
 
@@ -471,8 +495,8 @@ impl AlexandriaEngine {
         })?;
         Ok(domains
             .into_iter()
-            .map(|(domain, visit_count, total_bytes)| TopDomain {
-                domain,
+            .map(|(site_group, visit_count, total_bytes)| TopDomain {
+                site_group,
                 visit_count,
                 total_bytes,
             })

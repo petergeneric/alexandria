@@ -6,6 +6,7 @@ struct SearchResult: Identifiable {
     let title: String
     let snippet: String
     let domain: String
+    let siteGroup: String
     let score: Float
     let visitedAt: Date?
 }
@@ -101,6 +102,7 @@ class SearchEngineWrapper {
                 title: r.title,
                 snippet: r.contentSnippet,
                 domain: r.domain,
+                siteGroup: r.siteGroup,
                 score: r.score,
                 visitedAt: r.visitedAtSecs.map { Date(timeIntervalSince1970: TimeInterval($0)) }
             )

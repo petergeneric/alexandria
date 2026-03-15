@@ -29,6 +29,11 @@ enum DateRangeFilter: String, CaseIterable, Identifiable {
     }
 }
 
+enum SiteFacetMode: String, CaseIterable {
+    case siteGroup = "Site"
+    case domain = "Domain"
+}
+
 struct DomainFacet: Identifiable {
     let domain: String
     let count: Int
@@ -41,24 +46,29 @@ class SearchViewModel: ObservableObject {
     @Published var isSearching = false
     @Published var selectedDateRange: DateRangeFilter = .all
     @Published var selectedDomains: Set<String> = []
+    @Published var siteFacetMode: SiteFacetMode = .siteGroup
     @Published var pendingCount: UInt64 = 0
     @Published var pendingOldest: Date? = nil
     @Published var isIndexing = false
 
+    private func facetKey(_ result: SearchResult) -> String {
+        siteFacetMode == .siteGroup ? result.siteGroup : result.domain
+    }
+
     var filteredResults: [SearchResult] {
         results.filter { result in
             let dateMatch = selectedDateRange.matches(result.visitedAt)
-            let domainMatch = selectedDomains.isEmpty || selectedDomains.contains(result.domain)
+            let domainMatch = selectedDomains.isEmpty || selectedDomains.contains(facetKey(result))
             return dateMatch && domainMatch
         }
     }
 
     var domainFacets: [DomainFacet] {
-        // Count domains from date-filtered results only
+        // Count by facet key from date-filtered results only
         let dateFiltered = results.filter { selectedDateRange.matches($0.visitedAt) }
         var counts: [String: Int] = [:]
         for r in dateFiltered {
-            counts[r.domain, default: 0] += 1
+            counts[facetKey(r), default: 0] += 1
         }
         return counts.map { DomainFacet(domain: $0.key, count: $0.value) }
             .sorted { $0.count > $1.count }
@@ -68,7 +78,7 @@ class SearchViewModel: ObservableObject {
         // Count results per date range (independent of date filter selection)
         let domainFiltered = selectedDomains.isEmpty
             ? results
-            : results.filter { selectedDomains.contains($0.domain) }
+            : results.filter { selectedDomains.contains(facetKey($0)) }
         var counts: [DateRangeFilter: Int] = [:]
         for filter in DateRangeFilter.allCases {
             counts[filter] = domainFiltered.filter { filter.matches($0.visitedAt) }.count
@@ -105,6 +115,14 @@ class SearchViewModel: ObservableObject {
                     guard !Task.isCancelled else { return }
                     self?.performSearch()
                 }
+            }
+            .store(in: &cancellables)
+
+        // Clear domain selections when facet mode changes
+        $siteFacetMode
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.selectedDomains.removeAll()
             }
             .store(in: &cancellables)
     }

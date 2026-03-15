@@ -19,6 +19,7 @@ tracing = { workspace = true }
 crossbeam-channel = { workspace = true }
 chrono = { workspace = true }
 url = { workspace = true }
+addr = { workspace = true }
 scraper = { workspace = true }
 uniffi = { workspace = true }
 rusqlite = { workspace = true }

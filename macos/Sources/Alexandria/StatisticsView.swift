@@ -605,7 +605,7 @@ private struct TopSitesPanel: View {
                         .foregroundColor(.secondary)
                         .frame(width: 28, alignment: .trailing)
 
-                    Text(domain.domain)
+                    Text(domain.siteGroup)
                         .frame(width: 200, alignment: .leading)
                         .lineLimit(1)
 

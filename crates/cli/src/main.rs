@@ -55,6 +55,17 @@ enum Commands {
         #[arg(long)]
         store: Option<String>,
     },
+
+    /// Backfill domain (www-strip) and site_group columns in pages.db
+    Migrate {
+        /// Path to pages.db
+        #[arg(long)]
+        store: Option<String>,
+
+        /// Print what would change without writing
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 fn expand_tilde(path: &str) -> PathBuf {
@@ -319,9 +330,10 @@ fn import_firefox(places_path: &str, store: Option<&str>) {
     for row in &to_insert {
         let content = row.description.as_deref().unwrap_or_default();
         let domain = extract::extract_domain(&row.url);
+        let site_group = extract::extract_site_group(&row.url);
         let captured_at = row.last_visit_date / 1_000_000; // Firefox uses microseconds
         let content_hash = xxh3_128(content.as_bytes()).to_le_bytes();
-        if let Err(e) = page_store.insert(&row.url, &row.title, content.as_bytes(), &domain, captured_at, &content_hash) {
+        if let Err(e) = page_store.insert(&row.url, &row.title, content.as_bytes(), &domain, &site_group, captured_at, &content_hash) {
             eprintln!("Warning: failed to insert {}: {e}", row.url);
             continue;
         }
@@ -329,6 +341,128 @@ fn import_firefox(places_path: &str, store: Option<&str>) {
     }
 
     println!("Imported {imported} pages from Firefox history.");
+}
+
+fn migrate_store(store: Option<&str>, dry_run: bool) {
+    let store_path = resolve_store_path(store);
+    if !store_path.exists() {
+        eprintln!("Error: page store not found at {}", store_path.display());
+        std::process::exit(1);
+    }
+
+    let db = match rusqlite::Connection::open(&store_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error opening page store: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    // Ensure site_group column exists (may be missing on pre-migration DBs)
+    let has_site_group: bool = db
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('pages') WHERE name='site_group'")
+        .and_then(|mut s| s.query_row([], |row| row.get::<_, i64>(0)))
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    if !has_site_group {
+        db.execute_batch("ALTER TABLE pages ADD COLUMN site_group TEXT NOT NULL DEFAULT ''")
+            .unwrap();
+        println!("Added site_group column to schema.");
+    }
+
+    let mut stmt = db
+        .prepare("SELECT id, url, domain, site_group FROM pages")
+        .unwrap();
+
+    struct Row {
+        id: i64,
+        url: String,
+        old_domain: String,
+        old_site_group: String,
+    }
+
+    let rows: Vec<Row> = stmt
+        .query_map([], |row| {
+            Ok(Row {
+                id: row.get(0)?,
+                url: row.get(1)?,
+                old_domain: row.get(2)?,
+                old_site_group: row.get(3)?,
+            })
+        })
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let total = rows.len();
+    let mut domain_updates = 0u64;
+    let mut group_updates = 0u64;
+
+    if !dry_run {
+        db.execute_batch("BEGIN").unwrap();
+    }
+
+    let mut update_stmt = if !dry_run {
+        Some(
+            db.prepare("UPDATE pages SET domain = ?1, site_group = ?2 WHERE id = ?3")
+                .unwrap(),
+        )
+    } else {
+        None
+    };
+
+    for row in &rows {
+        let new_domain = extract::extract_domain(&row.url);
+        let new_site_group = extract::extract_site_group(&row.url);
+
+        let domain_changed = new_domain != row.old_domain;
+        let group_changed = new_site_group != row.old_site_group;
+
+        if !domain_changed && !group_changed {
+            continue;
+        }
+
+        if domain_changed {
+            domain_updates += 1;
+        }
+        if group_changed {
+            group_updates += 1;
+        }
+
+        if dry_run {
+            if domain_changed {
+                println!(
+                    "  id={}: domain '{}' → '{}'",
+                    row.id, row.old_domain, new_domain
+                );
+            }
+            if group_changed {
+                println!(
+                    "  id={}: site_group '{}' → '{}'",
+                    row.id, row.old_site_group, new_site_group
+                );
+            }
+        } else {
+            update_stmt
+                .as_mut()
+                .unwrap()
+                .execute(rusqlite::params![new_domain, new_site_group, row.id])
+                .unwrap();
+        }
+    }
+
+    if !dry_run {
+        db.execute_batch("COMMIT").unwrap();
+    }
+
+    let verb = if dry_run { "Would update" } else { "Updated" };
+    println!(
+        "{verb} {domain_updates} domains, {group_updates} site_groups across {total} pages."
+    );
+
+    if !dry_run && (domain_updates > 0 || group_updates > 0) {
+        println!("Run a reindex to update the search index.");
+    }
 }
 
 fn main() {
@@ -343,6 +477,10 @@ fn main() {
     let index_path = resolve_index_path(cli.index_dir.as_deref());
 
     match cli.command {
+        Commands::Migrate { store, dry_run } => {
+            migrate_store(store.as_deref(), dry_run);
+            return;
+        }
         Commands::ImportFirefox { places, store } => {
             import_firefox(&places, store.as_deref());
         }

@@ -7,6 +7,9 @@ use thiserror::Error;
 
 use crate::ingest::PageSnapshot;
 
+/// Bump this whenever the Tantivy schema changes to trigger automatic reindex.
+pub const SCHEMA_REVISION: i64 = 2;
+
 #[derive(Debug, Error)]
 pub enum IndexError {
     #[error("tantivy error: {0}")]
@@ -23,6 +26,7 @@ pub struct SchemaFields {
     pub title: Field,
     pub content: Field,
     pub domain: Field,
+    pub site_group: Field,
     pub visited_at: Field,
     pub page_id: Field,
 }
@@ -41,6 +45,7 @@ impl SchemaFields {
             title: field("title")?,
             content: field("content")?,
             domain: field("domain")?,
+            site_group: field("site_group")?,
             visited_at: field("visited_at")?,
             page_id: field("page_id")?,
         })
@@ -55,6 +60,7 @@ pub fn build_schema() -> Schema {
     builder.add_text_field("title", TEXT | STORED);
     builder.add_text_field("content", TEXT);
     builder.add_text_field("domain", STRING | STORED);
+    builder.add_text_field("site_group", STRING | STORED);
     builder.add_date_field("visited_at", INDEXED | STORED);
     builder.add_u64_field("page_id", STORED);
 
@@ -62,16 +68,33 @@ pub fn build_schema() -> Schema {
 }
 
 /// Open or create a Tantivy index at the given path.
+/// If an existing index has a stale schema (missing fields), it is wiped and
+/// recreated so that a reindex from the SQLite store rebuilds it cleanly.
 pub fn open_or_create_index(index_dir: &Path) -> Result<Index, IndexError> {
     std::fs::create_dir_all(index_dir)?;
 
-    let index = if index_dir.join("meta.json").exists() {
-        Index::open_in_dir(index_dir)?
-    } else {
-        let schema = build_schema();
-        Index::create_in_dir(index_dir, schema)?
-    };
+    if index_dir.join("meta.json").exists() {
+        let index = Index::open_in_dir(index_dir)?;
+        match SchemaFields::from_index(&index) {
+            Ok(_) => return Ok(index),
+            Err(IndexError::MissingField(f)) => {
+                tracing::warn!(
+                    field = %f,
+                    "Index schema outdated, recreating index (reindex required)"
+                );
+                drop(index);
+                // Remove stale index files so we can create a fresh one
+                for entry in std::fs::read_dir(index_dir)? {
+                    let entry = entry?;
+                    std::fs::remove_file(entry.path()).ok();
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
 
+    let schema = build_schema();
+    let index = Index::create_in_dir(index_dir, schema)?;
     Ok(index)
 }
 
@@ -90,6 +113,7 @@ pub fn index_snapshots(
         doc.add_text(fields.title, &snapshot.title);
         doc.add_text(fields.content, &snapshot.content);
         doc.add_text(fields.domain, &snapshot.domain);
+        doc.add_text(fields.site_group, &snapshot.site_group);
         doc.add_date(fields.visited_at, visited);
         doc.add_u64(fields.page_id, snapshot.page_id as u64);
 

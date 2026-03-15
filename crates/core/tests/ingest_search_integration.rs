@@ -85,7 +85,7 @@ impl TestHarness {
         let hash = content_hash(html.as_bytes());
         let content = store_content(html, domain);
         self.store
-            .insert(url, title, content.as_bytes(), domain, captured_at, &hash)
+            .insert(url, title, content.as_bytes(), domain, domain, captured_at, &hash)
             .unwrap();
     }
 
@@ -102,6 +102,7 @@ impl TestHarness {
                     title: p.title.clone(),
                     content,
                     domain: p.domain.clone(),
+                    site_group: p.site_group.clone(),
                     captured_at: p.captured_at,
                 }
             })
@@ -325,7 +326,7 @@ fn test_snippet_from_stored_html_with_filter() {
         "https://www.reddit.com/r/programming/comments/abc",
         "Reddit Discussion",
         html,
-        "www.reddit.com",
+        "reddit.com",
         1000,
     );
     h.index_pages(0);

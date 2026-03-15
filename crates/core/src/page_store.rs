@@ -21,6 +21,7 @@ pub struct StoredPage {
     pub title: String,
     pub html: String,
     pub domain: String,
+    pub site_group: String,
     pub captured_at: i64,
 }
 
@@ -42,10 +43,19 @@ impl PageStore {
                 title         TEXT NOT NULL DEFAULT '',
                 html          BLOB NOT NULL,
                 domain        TEXT NOT NULL DEFAULT '',
+                site_group    TEXT NOT NULL DEFAULT '',
                 captured_at   INTEGER NOT NULL,
                 content_hash  BLOB NOT NULL
             );",
         )?;
+        // Migration: add site_group column to existing databases
+        let has_site_group: bool = db
+            .prepare("SELECT COUNT(*) FROM pragma_table_info('pages') WHERE name='site_group'")?
+            .query_row([], |row| row.get::<_, i64>(0))
+            .map(|c| c > 0)?;
+        if !has_site_group {
+            db.execute_batch("ALTER TABLE pages ADD COLUMN site_group TEXT NOT NULL DEFAULT ''")?;
+        }
         Ok(Self { db })
     }
 
@@ -55,15 +65,16 @@ impl PageStore {
         title: &str,
         html: &[u8],
         domain: &str,
+        site_group: &str,
         captured_at: i64,
         content_hash: &[u8; 16],
     ) -> Result<(), PageStoreError> {
         let compressed =
             zstd::encode_all(html, 3).map_err(|e| PageStoreError::Compression(e.to_string()))?;
         self.db.execute(
-            "INSERT INTO pages (url, title, html, domain, captured_at, content_hash)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![url, title, compressed, domain, captured_at, &content_hash[..]],
+            "INSERT INTO pages (url, title, html, domain, site_group, captured_at, content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![url, title, compressed, domain, site_group, captured_at, &content_hash[..]],
         )?;
         Ok(())
     }
@@ -95,7 +106,7 @@ impl PageStore {
         limit: usize,
     ) -> Result<Vec<StoredPage>, PageStoreError> {
         let mut stmt = self.db.prepare(
-            "SELECT id, url, title, html, domain, captured_at
+            "SELECT id, url, title, html, domain, site_group, captured_at
              FROM pages WHERE id > ?1
              ORDER BY id
              LIMIT ?2",
@@ -108,13 +119,14 @@ impl PageStore {
                 row.get::<_, String>(2)?,
                 compressed,
                 row.get::<_, String>(4)?,
-                row.get::<_, i64>(5)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, i64>(6)?,
             ))
         })?;
 
         let mut pages = Vec::new();
         for row in rows {
-            let (id, url, title, compressed, domain, captured_at) = row?;
+            let (id, url, title, compressed, domain, site_group, captured_at) = row?;
             let html = zstd::decode_all(compressed.as_slice())
                 .map_err(|e| PageStoreError::Compression(e.to_string()))?;
             let html = String::from_utf8_lossy(&html).into_owned();
@@ -124,6 +136,7 @@ impl PageStore {
                 title,
                 html,
                 domain,
+                site_group,
                 captured_at,
             });
         }
@@ -191,7 +204,7 @@ impl PageStore {
             "SELECT CAST(strftime('%w', captured_at, 'unixepoch', 'localtime') AS INTEGER),
                     CAST(strftime('%H', captured_at, 'unixepoch', 'localtime') AS INTEGER),
                     COUNT(*),
-                    COUNT(DISTINCT domain)
+                    COUNT(DISTINCT site_group)
              FROM pages GROUP BY 1, 2",
         )?;
         let visit_rows: Vec<(i32, i32, i64, i64)> = stmt
@@ -219,11 +232,11 @@ impl PageStore {
             .collect())
     }
 
-    /// Returns (domain, visit_count, total_compressed_bytes) for top domains.
+    /// Returns (site_group, visit_count, total_compressed_bytes) for top site groups.
     pub fn top_domains(&self, limit: i64) -> Result<Vec<(String, i64, i64)>, PageStoreError> {
         let mut stmt = self.db.prepare(
-            "SELECT domain, COUNT(*), SUM(length(html))
-             FROM pages GROUP BY domain ORDER BY COUNT(*) DESC LIMIT ?1",
+            "SELECT site_group, COUNT(*), SUM(length(html))
+             FROM pages GROUP BY site_group ORDER BY COUNT(*) DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(params![limit], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get::<_, i64>(2)?))
@@ -282,7 +295,7 @@ mod tests {
         let (_path, store) = temp_db();
         let html = b"<html><body>Hello</body></html>";
         store
-            .insert("https://example.com", "Example", html, "example.com", 1000, &hash(html))
+            .insert("https://example.com", "Example", html, "example.com", "example.com", 1000, &hash(html))
             .unwrap();
 
         let pages = store.pages_after(0, 10).unwrap();
@@ -296,9 +309,9 @@ mod tests {
     #[test]
     fn test_watermark_filtering() {
         let (_path, store) = temp_db();
-        store.insert("https://a.com", "A", b"a", "a.com", 1000, &hash(b"a")).unwrap();
-        store.insert("https://b.com", "B", b"b", "b.com", 2000, &hash(b"b")).unwrap();
-        store.insert("https://c.com", "C", b"c", "c.com", 3000, &hash(b"c")).unwrap();
+        store.insert("https://a.com", "A", b"a", "a.com", "a.com", 1000, &hash(b"a")).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", "b.com", 2000, &hash(b"b")).unwrap();
+        store.insert("https://c.com", "C", b"c", "c.com", "c.com", 3000, &hash(b"c")).unwrap();
 
         let all = store.pages_after(0, 10).unwrap();
         assert_eq!(all.len(), 3);
@@ -311,8 +324,8 @@ mod tests {
     #[test]
     fn test_pages_after_count() {
         let (_path, store) = temp_db();
-        store.insert("https://a.com", "A", b"a", "a.com", 1000, &hash(b"a")).unwrap();
-        store.insert("https://b.com", "B", b"b", "b.com", 2000, &hash(b"b")).unwrap();
+        store.insert("https://a.com", "A", b"a", "a.com", "a.com", 1000, &hash(b"a")).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", "b.com", 2000, &hash(b"b")).unwrap();
 
         let (count, oldest) = store.pages_after_count(0).unwrap();
         assert_eq!(count, 2);
@@ -327,7 +340,7 @@ mod tests {
     fn test_get_html_by_id() {
         let (_path, store) = temp_db();
         store
-            .insert("https://example.com", "Ex", b"<p>hi</p>", "example.com", 1000, &hash(b"<p>hi</p>"))
+            .insert("https://example.com", "Ex", b"<p>hi</p>", "example.com", "example.com", 1000, &hash(b"<p>hi</p>"))
             .unwrap();
 
         let pages = store.pages_after(0, 10).unwrap();
@@ -343,7 +356,7 @@ mod tests {
         let (_path, store) = temp_db();
         let html = "<html>".repeat(10000);
         store
-            .insert("https://big.com", "Big", html.as_bytes(), "big.com", 1000, &hash(html.as_bytes()))
+            .insert("https://big.com", "Big", html.as_bytes(), "big.com", "big.com", 1000, &hash(html.as_bytes()))
             .unwrap();
         let pages = store.pages_after(0, 10).unwrap();
         assert_eq!(pages[0].html, html);
@@ -355,9 +368,9 @@ mod tests {
         let h1 = hash(b"a");
         let h2 = hash(b"b");
         let h3 = hash(b"c");
-        store.insert("https://a.com", "A", b"a", "a.com", 1000, &h1).unwrap();
-        store.insert("https://b.com", "B", b"b", "b.com", 2000, &h2).unwrap();
-        store.insert("https://c.com", "C", b"c", "c.com", 3000, &h3).unwrap();
+        store.insert("https://a.com", "A", b"a", "a.com", "a.com", 1000, &h1).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", "b.com", 2000, &h2).unwrap();
+        store.insert("https://c.com", "C", b"c", "c.com", "c.com", 3000, &h3).unwrap();
 
         // Fetch last 2 — should be b and c in insertion order
         let hashes = store.recent_content_hashes(2).unwrap();
@@ -375,9 +388,9 @@ mod tests {
     fn test_daily_page_counts() {
         let (_path, store) = temp_db();
         // Two pages on same day, one on a different day
-        store.insert("https://a.com", "A", b"a", "a.com", 1700000000, &hash(b"a")).unwrap();
-        store.insert("https://b.com", "B", b"b", "b.com", 1700000100, &hash(b"b")).unwrap();
-        store.insert("https://c.com", "C", b"c", "c.com", 1700100000, &hash(b"c")).unwrap();
+        store.insert("https://a.com", "A", b"a", "a.com", "a.com", 1700000000, &hash(b"a")).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", "b.com", 1700000100, &hash(b"b")).unwrap();
+        store.insert("https://c.com", "C", b"c", "c.com", "c.com", 1700100000, &hash(b"c")).unwrap();
 
         let counts = store.daily_page_counts().unwrap();
         assert!(counts.len() >= 1);
@@ -388,8 +401,8 @@ mod tests {
     #[test]
     fn test_day_hour_breakdown() {
         let (_path, store) = temp_db();
-        store.insert("https://a.com", "A", b"a", "a.com", 1700000000, &hash(b"a")).unwrap();
-        store.insert("https://b.com", "B", b"b", "b.com", 1700000100, &hash(b"b")).unwrap();
+        store.insert("https://a.com", "A", b"a", "a.com", "a.com", 1700000000, &hash(b"a")).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", "b.com", 1700000100, &hash(b"b")).unwrap();
 
         let breakdown = store.day_hour_breakdown().unwrap();
         assert!(!breakdown.is_empty());
@@ -400,9 +413,9 @@ mod tests {
     #[test]
     fn test_top_domains() {
         let (_path, store) = temp_db();
-        store.insert("https://a.com/1", "A1", b"a1", "a.com", 1000, &hash(b"a1")).unwrap();
-        store.insert("https://a.com/2", "A2", b"a2", "a.com", 2000, &hash(b"a2")).unwrap();
-        store.insert("https://b.com/1", "B1", b"b1", "b.com", 3000, &hash(b"b1")).unwrap();
+        store.insert("https://a.com/1", "A1", b"a1", "a.com", "a.com", 1000, &hash(b"a1")).unwrap();
+        store.insert("https://a.com/2", "A2", b"a2", "a.com", "a.com", 2000, &hash(b"a2")).unwrap();
+        store.insert("https://b.com/1", "B1", b"b1", "b.com", "b.com", 3000, &hash(b"b1")).unwrap();
 
         let top = store.top_domains(10).unwrap();
         assert_eq!(top.len(), 2);
@@ -415,7 +428,7 @@ mod tests {
     #[test]
     fn test_summary_counts() {
         let (_path, store) = temp_db();
-        store.insert("https://a.com", "A", b"a", "a.com", 1000, &hash(b"a")).unwrap();
+        store.insert("https://a.com", "A", b"a", "a.com", "a.com", 1000, &hash(b"a")).unwrap();
 
         let (total, today, this_week, this_month, this_year) = store.summary_counts().unwrap();
         assert_eq!(total, 1);

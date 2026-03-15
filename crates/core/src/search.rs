@@ -34,6 +34,7 @@ pub struct SearchResult {
     /// Keyword-in-context plaintext snippet (~200 chars).
     pub content_snippet: String,
     pub domain: String,
+    pub site_group: String,
     pub score: f32,
     pub visited_at: Option<DateTime<Utc>>,
 }
@@ -60,13 +61,13 @@ impl SearchEngine {
         let reader = self.index.reader()?;
         let searcher = reader.searcher();
 
-        // Field boosting: title 3x, domain 2x, content 1x
+        // Field boosting: title 3x, site_group 2x, content 1x
         let mut query_parser = QueryParser::for_index(
             &self.index,
-            vec![self.fields.title, self.fields.content, self.fields.domain],
+            vec![self.fields.title, self.fields.content, self.fields.site_group],
         );
         query_parser.set_field_boost(self.fields.title, 3.0);
-        query_parser.set_field_boost(self.fields.domain, 2.0);
+        query_parser.set_field_boost(self.fields.site_group, 2.0);
 
         let query = query_parser.parse_query(query_str)?;
         let top_docs = searcher.search(&query, &TopDocs::with_limit(limit).and_offset(offset))?;
@@ -87,6 +88,11 @@ impl SearchEngine {
                 .to_string();
             let domain = doc
                 .get_first(self.fields.domain)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let site_group = doc
+                .get_first(self.fields.site_group)
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
@@ -133,6 +139,7 @@ impl SearchEngine {
                 title,
                 content_snippet,
                 domain,
+                site_group,
                 score,
                 visited_at,
             });

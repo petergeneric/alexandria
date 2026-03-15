@@ -109,6 +109,7 @@ fn handle_snapshot(
     }
 
     let domain = extract::extract_domain(url);
+    let site_group = extract::extract_site_group(url);
     let captured_at = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
 
     // Sites with filter rules: store raw HTML (needs '<' prefix for detection).
@@ -128,7 +129,7 @@ fn handle_snapshot(
         }
     };
 
-    match store.insert(url, title, content.as_bytes(), &domain, captured_at, &hash) {
+    match store.insert(url, title, content.as_bytes(), &domain, &site_group, captured_at, &hash) {
         Ok(()) => HostResponse::ok(),
         Err(e) => HostResponse::error(e.to_string()),
     }

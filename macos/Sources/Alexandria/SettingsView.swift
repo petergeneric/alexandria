@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
     @State private var pageCount: UInt64 = 0
+    @State private var storePageCount: Int64 = 0
     @State private var indexSize: String = ""
     @State private var showDeleteConfirm = false
     @State private var showReindexConfirm = false
@@ -61,14 +62,14 @@ struct SettingsView: View {
                         Button("Reindex") {
                             showReindexConfirm = true
                         }
-                        .disabled(pageCount == 0 || isReindexing)
+                        .disabled(storePageCount == 0 || isReindexing)
 
                         Button(role: .destructive) {
                             showDeleteConfirm = true
                         } label: {
                             Text("Delete History")
                         }
-                        .disabled(pageCount == 0 || isReindexing)
+                        .disabled(storePageCount == 0 || isReindexing)
                     }
                 }
             }
@@ -98,6 +99,7 @@ struct SettingsView: View {
 
     private func refreshStats() {
         pageCount = engine?.docCount() ?? 0
+        storePageCount = engine?.summaryCounts(storePath: settings.storePath)?.total ?? 0
         indexSize = Self.directorySize(at: SearchViewModel.resolveIndexPath())
     }
 

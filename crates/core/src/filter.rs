@@ -9,7 +9,7 @@ use scraper::{Html, Selector};
 pub fn has_filter(domain: &str) -> bool {
     matches!(
         domain,
-        "news.ycombinator.com" | "www.reddit.com" | "old.reddit.com" | "bsky.app"
+        "news.ycombinator.com" | "reddit.com" | "old.reddit.com" | "bsky.app"
     )
 }
 
@@ -18,7 +18,7 @@ pub fn has_filter(domain: &str) -> bool {
 pub fn filter_html(html: &str, domain: &str) -> String {
     match domain {
         "news.ycombinator.com" => filter_by_selectors(html, &HACKERNEWS_REMOVE),
-        "www.reddit.com" | "old.reddit.com" => filter_by_selectors(html, &REDDIT_REMOVE),
+        "reddit.com" | "old.reddit.com" => filter_by_selectors(html, &REDDIT_REMOVE),
         "bsky.app" => filter_by_selectors(html, &BLUESKY_REMOVE),
         _ => html.to_string(),
     }
@@ -190,7 +190,7 @@ mod tests {
             <div class="side"><h1>Subreddit rules</h1></div>
             <div class="commentarea"><div class="md"><p>Great comment</p></div></div>
         </body></html>"#;
-        let filtered = filter_html(html, "www.reddit.com");
+        let filtered = filter_html(html, "reddit.com");
         assert!(!filtered.contains("Subreddit rules"));
         assert!(filtered.contains("Great comment"));
     }
@@ -201,7 +201,7 @@ mod tests {
             <div class="midcol"><div class="arrow up"></div><div class="arrow down"></div></div>
             <div class="entry"><div class="md"><p>Post content here</p></div></div>
         </body></html>"#;
-        let filtered = filter_html(html, "www.reddit.com");
+        let filtered = filter_html(html, "reddit.com");
         assert!(!filtered.contains("midcol"));
         assert!(filtered.contains("Post content here"));
     }
@@ -212,7 +212,7 @@ mod tests {
             <div id="header"><a href="/">reddit</a><div class="tabmenu">nav</div></div>
             <div class="content"><div class="md"><p>Actual post</p></div></div>
         </body></html>"#;
-        let filtered = filter_html(html, "www.reddit.com");
+        let filtered = filter_html(html, "reddit.com");
         assert!(!filtered.contains("tabmenu"));
         assert!(filtered.contains("Actual post"));
     }
@@ -226,7 +226,7 @@ mod tests {
                 <ul class="flat-list buttons"><li>reply</li><li>share</li></ul>
             </div>
         </body></html>"#;
-        let filtered = filter_html(html, "www.reddit.com");
+        let filtered = filter_html(html, "reddit.com");
         assert!(!filtered.contains("user123"));
         assert!(!filtered.contains("reply"));
         assert!(filtered.contains("This is my insightful comment"));

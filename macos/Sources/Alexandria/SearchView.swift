@@ -322,10 +322,14 @@ private struct FacetSidebar: View {
                 // Domain facet
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("Domain")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .textCase(.uppercase)
+                        Picker("", selection: $viewModel.siteFacetMode) {
+                            ForEach(SiteFacetMode.allCases, id: \.self) { mode in
+                                Text(mode.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(maxWidth: 120)
                         Spacer()
                         if !viewModel.selectedDomains.isEmpty {
                             Button("Clear") {
