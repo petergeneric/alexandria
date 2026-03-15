@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SearchView: View {
-    @StateObject private var viewModel = SearchViewModel()
+    @ObservedObject var viewModel: SearchViewModel
     @State private var showFacets = true
 
     private var hasResults: Bool { !viewModel.results.isEmpty }

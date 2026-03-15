@@ -76,6 +76,7 @@ class SearchViewModel: ObservableObject {
         return counts
     }
 
+    private(set) var lastSearchTime: Date?
     private let engine: SearchEngineWrapper?
     private let storePath: String
     private var debounceTask: Task<Void, Never>?
@@ -117,6 +118,7 @@ class SearchViewModel: ObservableObject {
         }
 
         isSearching = true
+        lastSearchTime = Date()
         let q = query
         let sp = storePath
 
@@ -151,6 +153,16 @@ class SearchViewModel: ObservableObject {
                     self.performSearch()
                 }
             }
+        }
+    }
+
+    func clearIfStale() {
+        guard let lastSearch = lastSearchTime else { return }
+        if Date().timeIntervalSince(lastSearch) > 600 {
+            query = ""
+            results = []
+            selectedDateRange = .all
+            selectedDomains.removeAll()
         }
     }
 

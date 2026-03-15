@@ -63,6 +63,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if searchPanel == nil {
             searchPanel = SearchPanel()
         }
+        searchPanel?.clearIfStale()
         searchPanel?.makeKeyAndOrderFront(nil)
         searchPanel?.center()
         NSApp.activate(ignoringOtherApps: true)

@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 class SearchPanel: NSPanel {
+    let viewModel = SearchViewModel()
+
     override var canBecomeKey: Bool { true }
 
     init() {
@@ -29,7 +31,7 @@ class SearchPanel: NSPanel {
             return event
         }
 
-        let hostingView = NSHostingView(rootView: SearchView())
+        let hostingView = NSHostingView(rootView: SearchView(viewModel: viewModel))
         contentView = hostingView
 
         center()
@@ -40,6 +42,10 @@ class SearchPanel: NSPanel {
         if let textField = findTextField(in: contentView) {
             makeFirstResponder(textField)
         }
+    }
+
+    func clearIfStale() {
+        viewModel.clearIfStale()
     }
 
     private func findTextField(in view: NSView) -> NSTextField? {

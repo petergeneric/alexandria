@@ -255,7 +255,7 @@ impl AlexandriaEngine {
         let mut total = 0u64;
         let mut watermark: i64 = 0;
         loop {
-            let pages = store.pages_after(watermark, 500).map_err(|e| AlexandriaError::IngestFailed {
+            let pages = store.pages_after(watermark, 5000).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
             if pages.is_empty() {
@@ -315,7 +315,7 @@ impl AlexandriaEngine {
             reason: e.to_string(),
         })?;
 
-        let pages = store.pages_after(watermark, 500).map_err(|e| AlexandriaError::IngestFailed {
+        let pages = store.pages_after(watermark, 5000).map_err(|e| AlexandriaError::IngestFailed {
             reason: e.to_string(),
         })?;
 
