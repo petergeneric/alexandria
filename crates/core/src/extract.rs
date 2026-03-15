@@ -16,7 +16,13 @@ pub fn html_to_markdown(html: &str) -> String {
             }
         })
         .build();
-    converter.convert(html).unwrap_or_default()
+    match converter.convert(html) {
+        Ok(md) => md,
+        Err(e) => {
+            tracing::warn!("HTML to markdown conversion failed: {e}");
+            String::new()
+        }
+    }
 }
 
 /// Convert Markdown to plain text, stripping all formatting.
@@ -58,9 +64,15 @@ pub fn extract_title(html: &str) -> String {
 fn extract_title_inner(html: &str) -> Option<String> {
     let lower = html.to_lowercase();
     let start = lower.find("<title")?;
-    let tag_end = lower[start..].find('>')? + start + 1;
-    let end = lower[tag_end..].find("</title")? + tag_end;
-    let title = html[tag_end..end].trim();
+    let tag_end = lower.get(start..)?.find('>')? + start + 1;
+    if tag_end > lower.len() {
+        return None;
+    }
+    let end = lower.get(tag_end..)?.find("</title")? + tag_end;
+    if end > html.len() {
+        return None;
+    }
+    let title = html.get(tag_end..end)?.trim();
     Some(title.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 
@@ -69,22 +81,21 @@ pub fn extract_url_from_html(html: &str) -> Option<String> {
     extract_canonical(html).or_else(|| extract_og_url(html))
 }
 
-fn extract_canonical(html: &str) -> Option<String> {
+fn extract_meta_attr(html: &str, selector: &str, attr: &str) -> Option<String> {
     let lower = html.to_lowercase();
-    let idx = lower.find("rel=\"canonical\"")?;
+    let idx = lower.find(selector)?;
     let tag_start = lower[..idx].rfind('<')?;
     let tag_end = lower[idx..].find('>')? + idx;
     let tag = &html[tag_start..=tag_end];
-    extract_attr_value(tag, "href")
+    extract_attr_value(tag, attr)
+}
+
+fn extract_canonical(html: &str) -> Option<String> {
+    extract_meta_attr(html, "rel=\"canonical\"", "href")
 }
 
 fn extract_og_url(html: &str) -> Option<String> {
-    let lower = html.to_lowercase();
-    let idx = lower.find("property=\"og:url\"")?;
-    let tag_start = lower[..idx].rfind('<')?;
-    let tag_end = lower[idx..].find('>')? + idx;
-    let tag = &html[tag_start..=tag_end];
-    extract_attr_value(tag, "content")
+    extract_meta_attr(html, "property=\"og:url\"", "content")
 }
 
 fn extract_attr_value(tag: &str, attr: &str) -> Option<String> {

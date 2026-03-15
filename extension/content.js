@@ -4,8 +4,13 @@
   // Listen for capture requests from the background script
   browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.action === "performAction") {
-      var data = capturePage();
-      sendResponse(data);
+      try {
+        var data = capturePage();
+        sendResponse(data);
+      } catch (e) {
+        console.error("Alexandria: failed to capture page:", e);
+        sendResponse({ error: e.message, html: null, title: null, url: null });
+      }
     }
     return false;
   });
@@ -91,7 +96,12 @@
   }
 
   function escapeAttr(value) {
-    return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
   // --- Auto-save with engagement gating ---
@@ -102,7 +112,9 @@
       if (nav.length > 0 && nav[0].responseStatus !== undefined) {
         return nav[0].responseStatus;
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn("Alexandria: could not read response status:", e.message);
+    }
     // API unavailable — assume 200 so we don't block on older browsers
     return 200;
   }
@@ -112,7 +124,6 @@
   function doAutoSave() {
     if (saved) return;
     saved = true;
-    teardownEngagement();
 
     browser.storage.local.get(
       ["options-autosave", "options-mode", "options-enabled-domains", "options-disabled-domains"],
@@ -121,13 +132,14 @@
           result["options-autosave"] === undefined
             ? true
             : result["options-autosave"];
-        if (!autosave) return;
+        if (!autosave) { saved = false; return; }
 
         var mode = result["options-mode"] || "enabled";
         var enabled = result["options-enabled-domains"] || [];
         var disabled = result["options-disabled-domains"] || [];
-        if (!AlexRules.shouldAutoSave(location.href, mode, enabled, disabled)) return;
+        if (!AlexRules.shouldAutoSave(location.href, mode, enabled, disabled)) { saved = false; return; }
 
+        teardownEngagement();
         var data = capturePage();
         browser.runtime.sendMessage({ type: "autosave", data: data });
       }

@@ -178,12 +178,24 @@ fn kwic_snippet(text: &str, query: &str, max_len: usize) -> String {
         })
         .min();
 
-    // Helper: convert a char index to its byte offset in `text`.
+    // Build a char→byte index map once to avoid O(n²) repeated counting.
+    let char_to_byte_map: Vec<usize> = text
+        .char_indices()
+        .map(|(byte_idx, _)| byte_idx)
+        .chain(std::iter::once(text.len()))
+        .collect();
+
     let char_to_byte = |ci: usize| -> usize {
-        text.char_indices()
-            .nth(ci)
-            .map(|(b, _)| b)
-            .unwrap_or(text.len())
+        if ci < char_to_byte_map.len() {
+            char_to_byte_map[ci]
+        } else {
+            text.len()
+        }
+    };
+
+    // Find the char index of the byte position of a space.
+    let byte_to_char = |byte_pos: usize| -> usize {
+        char_to_byte_map.partition_point(|&b| b <= byte_pos).saturating_sub(1)
     };
 
     let (start_char, end_char) = match match_char_pos {
@@ -195,7 +207,7 @@ fn kwic_snippet(text: &str, query: &str, max_len: usize) -> String {
                 let byte_start = char_to_byte(raw_start);
                 text[..byte_start]
                     .rfind(' ')
-                    .map(|b| text[..=b].chars().count())
+                    .map(|b| byte_to_char(b) + 1)
                     .unwrap_or(0)
             } else {
                 0
@@ -205,7 +217,7 @@ fn kwic_snippet(text: &str, query: &str, max_len: usize) -> String {
                 let byte_end = char_to_byte(raw_end);
                 text[..byte_end]
                     .rfind(' ')
-                    .map(|b| text[..b].chars().count())
+                    .map(|b| byte_to_char(b))
                     .unwrap_or(raw_end)
             } else {
                 char_count
@@ -218,7 +230,7 @@ fn kwic_snippet(text: &str, query: &str, max_len: usize) -> String {
                 let byte_end = char_to_byte(raw_end);
                 text[..byte_end]
                     .rfind(' ')
-                    .map(|b| text[..b].chars().count())
+                    .map(|b| byte_to_char(b))
                     .unwrap_or(raw_end)
             } else {
                 raw_end

@@ -258,15 +258,19 @@ fn import_firefox(places_path: &str, store: Option<&str>) {
 
     let blocklist = Blocklist::load();
 
-    let mut stmt = ff_db
-        .prepare(
+    let mut stmt = match ff_db.prepare(
             "SELECT url, title, description, last_visit_date
              FROM moz_places
              WHERE title IS NOT NULL AND title != ''
                AND last_visit_date IS NOT NULL
              ORDER BY last_visit_date DESC",
-        )
-        .unwrap();
+        ) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error preparing Firefox query: {e}");
+            std::process::exit(1);
+        }
+    };
 
     // Collect rows, deduplicating by title (first occurrence = most recent)
     let mut seen_titles: HashMap<String, ()> = HashMap::new();
@@ -279,18 +283,20 @@ fn import_firefox(places_path: &str, store: Option<&str>) {
         last_visit_date: i64,
     }
 
-    let rows: Vec<Row> = stmt
-        .query_map([], |row| {
+    let rows: Vec<Row> = match stmt.query_map([], |row| {
             Ok(Row {
                 url: row.get(0)?,
                 title: row.get(1)?,
                 description: row.get(2)?,
                 last_visit_date: row.get(3)?,
             })
-        })
-        .unwrap()
-        .filter_map(|r| r.ok())
-        .collect();
+        }) {
+        Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
+        Err(e) => {
+            eprintln!("Error querying Firefox history: {e}");
+            std::process::exit(1);
+        }
+    };
 
     // Collect filtered, deduplicated rows first
     let mut to_insert: Vec<Row> = Vec::new();
@@ -370,9 +376,13 @@ fn migrate_store(store: Option<&str>, dry_run: bool) {
         println!("Added site_group column to schema.");
     }
 
-    let mut stmt = db
-        .prepare("SELECT id, url, domain, site_group FROM pages")
-        .unwrap();
+    let mut stmt = match db.prepare("SELECT id, url, domain, site_group FROM pages") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error preparing migration query: {e}");
+            std::process::exit(1);
+        }
+    };
 
     struct Row {
         id: i64,
@@ -381,32 +391,40 @@ fn migrate_store(store: Option<&str>, dry_run: bool) {
         old_site_group: String,
     }
 
-    let rows: Vec<Row> = stmt
-        .query_map([], |row| {
+    let rows: Vec<Row> = match stmt.query_map([], |row| {
             Ok(Row {
                 id: row.get(0)?,
                 url: row.get(1)?,
                 old_domain: row.get(2)?,
                 old_site_group: row.get(3)?,
             })
-        })
-        .unwrap()
-        .filter_map(|r| r.ok())
-        .collect();
+        }) {
+        Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
+        Err(e) => {
+            eprintln!("Error querying pages for migration: {e}");
+            std::process::exit(1);
+        }
+    };
 
     let total = rows.len();
     let mut domain_updates = 0u64;
     let mut group_updates = 0u64;
 
     if !dry_run {
-        db.execute_batch("BEGIN").unwrap();
+        if let Err(e) = db.execute_batch("BEGIN") {
+            eprintln!("Error starting transaction: {e}");
+            std::process::exit(1);
+        }
     }
 
     let mut update_stmt = if !dry_run {
-        Some(
-            db.prepare("UPDATE pages SET domain = ?1, site_group = ?2 WHERE id = ?3")
-                .unwrap(),
-        )
+        match db.prepare("UPDATE pages SET domain = ?1, site_group = ?2 WHERE id = ?3") {
+            Ok(s) => Some(s),
+            Err(e) => {
+                eprintln!("Error preparing update statement: {e}");
+                std::process::exit(1);
+            }
+        }
     } else {
         None
     };
@@ -442,17 +460,18 @@ fn migrate_store(store: Option<&str>, dry_run: bool) {
                     row.id, row.old_site_group, new_site_group
                 );
             }
-        } else {
-            update_stmt
-                .as_mut()
-                .unwrap()
-                .execute(rusqlite::params![new_domain, new_site_group, row.id])
-                .unwrap();
+        } else if let Some(ref mut stmt) = update_stmt {
+            if let Err(e) = stmt.execute(rusqlite::params![new_domain, new_site_group, row.id]) {
+                eprintln!("Warning: failed to update page {}: {e}", row.id);
+            }
         }
     }
 
     if !dry_run {
-        db.execute_batch("COMMIT").unwrap();
+        if let Err(e) = db.execute_batch("COMMIT") {
+            eprintln!("Error committing transaction: {e}");
+            std::process::exit(1);
+        }
     }
 
     let verb = if dry_run { "Would update" } else { "Updated" };

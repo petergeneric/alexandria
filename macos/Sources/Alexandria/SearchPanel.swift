@@ -3,8 +3,15 @@ import SwiftUI
 
 class SearchPanel: NSPanel {
     let viewModel = SearchViewModel()
+    private var eventMonitor: Any?
 
     override var canBecomeKey: Bool { true }
+
+    deinit {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
 
     init() {
         super.init(
@@ -23,7 +30,7 @@ class SearchPanel: NSPanel {
         titleVisibility = .hidden
 
         // Allow Esc to close
-        _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 {
                 self?.viewModel.clearSearch()
                 self?.close()

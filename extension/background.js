@@ -76,8 +76,12 @@ function captureTab(tab) {
 
   setBadge(tab.id, "SAVE", "#4285f4");
 
-  browser.tabs
-    .sendMessage(tab.id, { action: "performAction" })
+  Promise.race([
+    browser.tabs.sendMessage(tab.id, { action: "performAction" }),
+    new Promise(function (_, reject) {
+      setTimeout(function () { reject(new Error("timeout")); }, 5000);
+    }),
+  ])
     .then(function (response) {
       if (response && response.html) {
         sendToNative({

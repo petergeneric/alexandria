@@ -86,7 +86,8 @@ fn read_message(stdin: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
 }
 
 fn write_message(stdout: &mut impl Write, response: &HostResponse) -> io::Result<()> {
-    let json = serde_json::to_vec(response).unwrap();
+    let json = serde_json::to_vec(response)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let len = (json.len() as u32).to_le_bytes();
     stdout.write_all(&len)?;
     stdout.write_all(&json)?;

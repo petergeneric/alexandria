@@ -15,10 +15,12 @@ class SearchEngineWrapper {
     private let engine: AlexandriaEngine
 
     init?(indexPath: String, appDbPath: String) {
-        guard let eng = try? AlexandriaEngine.open(indexPath: indexPath, appDbPath: appDbPath) else {
+        do {
+            engine = try AlexandriaEngine.open(indexPath: indexPath, appDbPath: appDbPath)
+        } catch {
+            print("SearchEngineWrapper: failed to open index at \(indexPath): \(error)")
             return nil
         }
-        engine = eng
     }
 
     func ingestFromStore(storePath: String) -> Int {

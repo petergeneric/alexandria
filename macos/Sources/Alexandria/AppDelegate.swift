@@ -158,9 +158,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.contentView = hostingView
             window.center()
             logWindow = window
-        } else {
-            // Refresh the view with latest data
-            logWindow?.contentView = NSHostingView(rootView: IngestLogView(engine: engine))
         }
         searchPanel?.close()
         logWindow?.makeKeyAndOrderFront(nil)

@@ -262,7 +262,7 @@ impl AlexandriaEngine {
             })?;
         }
 
-        let app_db = self.app_db.lock().unwrap();
+        let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         app_db.set_watermark(0).map_err(|e| AlexandriaError::IngestFailed {
             reason: e.to_string(),
         })?;
@@ -278,7 +278,7 @@ impl AlexandriaEngine {
             PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
-        let app_db = self.app_db.lock().unwrap();
+        let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let fields = SchemaFields::from_index(&self.index).map_err(|e| {
             AlexandriaError::IngestFailed {
@@ -346,7 +346,7 @@ impl AlexandriaEngine {
             PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
-        let app_db = self.app_db.lock().unwrap();
+        let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let watermark = app_db.get_watermark().map_err(|e| AlexandriaError::IngestFailed {
             reason: e.to_string(),
         })?;
@@ -364,7 +364,7 @@ impl AlexandriaEngine {
             PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
-        let app_db = self.app_db.lock().unwrap();
+        let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let watermark = app_db.get_watermark().map_err(|e| AlexandriaError::IngestFailed {
             reason: e.to_string(),
@@ -412,7 +412,7 @@ impl AlexandriaEngine {
     }
 
     pub fn recent_ingest_failures(&self, limit: u32) -> Result<Vec<IngestLogEntry>, AlexandriaError> {
-        let app_db = self.app_db.lock().unwrap();
+        let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let entries = app_db.recent_ingest_failures(limit).map_err(|e| {
             AlexandriaError::SearchFailed {
                 reason: e.to_string(),
@@ -429,7 +429,7 @@ impl AlexandriaEngine {
     }
 
     pub fn clear_ingest_log(&self) -> Result<(), AlexandriaError> {
-        let app_db = self.app_db.lock().unwrap();
+        let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         app_db.clear_ingest_log().map_err(|e| {
             AlexandriaError::IngestFailed {
                 reason: e.to_string(),

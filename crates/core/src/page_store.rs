@@ -127,9 +127,15 @@ impl PageStore {
         let mut pages = Vec::new();
         for row in rows {
             let (id, url, title, compressed, domain, site_group, captured_at) = row?;
-            let html = zstd::decode_all(compressed.as_slice())
+            let html_bytes = zstd::decode_all(compressed.as_slice())
                 .map_err(|e| PageStoreError::Compression(e.to_string()))?;
-            let html = String::from_utf8_lossy(&html).into_owned();
+            let html = match String::from_utf8(html_bytes) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::warn!(id, "Page has invalid UTF-8, using lossy conversion");
+                    String::from_utf8_lossy(e.as_bytes()).into_owned()
+                }
+            };
             pages.push(StoredPage {
                 id,
                 url,
@@ -165,9 +171,16 @@ impl PageStore {
         match rows.next()? {
             Some(row) => {
                 let compressed: Vec<u8> = row.get(0)?;
-                let html = zstd::decode_all(compressed.as_slice())
+                let html_bytes = zstd::decode_all(compressed.as_slice())
                     .map_err(|e| PageStoreError::Compression(e.to_string()))?;
-                Ok(Some(String::from_utf8_lossy(&html).into_owned()))
+                let html = match String::from_utf8(html_bytes) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::warn!(id, "Page has invalid UTF-8 in get_html_by_id, using lossy conversion");
+                        String::from_utf8_lossy(e.as_bytes()).into_owned()
+                    }
+                };
+                Ok(Some(html))
             }
             None => Ok(None),
         }
