@@ -1,32 +1,50 @@
 # Data Model
 
-## SQLite Page Store
+## SQLite Page Store (`pages.db`)
 
-The browser extension captures pages into a SQLite database (`pages.db`). Each page is stored with its raw HTML (zstd-compressed) and metadata.
+The browser extension captures pages into a SQLite database. Each page is stored with zstd-compressed HTML and a content hash for deduplication.
 
 ### Schema
 
 ```sql
 CREATE TABLE pages (
-    source_hash TEXT PRIMARY KEY,
-    url         TEXT NOT NULL,
-    title       TEXT NOT NULL DEFAULT '',
-    html        BLOB NOT NULL,          -- zstd-compressed raw HTML
-    domain      TEXT NOT NULL DEFAULT '',
-    captured_at INTEGER NOT NULL,       -- Unix timestamp
-    indexed_at  INTEGER                 -- NULL until indexed into Tantivy
+    id            INTEGER PRIMARY KEY,
+    url           TEXT NOT NULL,
+    title         TEXT NOT NULL DEFAULT '',
+    html          BLOB NOT NULL,          -- zstd-compressed raw HTML
+    domain        TEXT NOT NULL DEFAULT '',
+    captured_at   INTEGER NOT NULL,       -- Unix timestamp
+    content_hash  BLOB NOT NULL           -- 16-byte xxhash3_128
 );
 ```
 
-### Key Operations
+## Application Database (`app.db`)
 
-| Operation | Description |
-|-----------|-------------|
-| `upsert` | Insert or replace a page (resets `indexed_at` to NULL) |
-| `pending(limit)` | Fetch pages where `indexed_at IS NULL` |
-| `mark_indexed_batch` | Set `indexed_at` after successful Tantivy indexing |
-| `delete_all` | Truncate all pages (used by Delete History) |
-| `reset_indexed` | Set all `indexed_at` to NULL (used by Reindex) |
+Bookkeeping metadata is stored separately from page data. Managed by the `app_db` module.
+
+### `meta` table
+
+Key-value store for indexing state:
+
+| Key | Value | Purpose |
+|-----|-------|---------|
+| `watermark` | rowid (integer as text) | Highest `pages.id` that has been indexed into Tantivy |
+| `schema_revision` | integer as text | Tantivy schema version for migration detection |
+
+### `ingest_log` table
+
+Tracks pages that failed during indexing, surfaced in the macOS app UI.
+
+```sql
+CREATE TABLE ingest_log (
+    id        INTEGER PRIMARY KEY,
+    timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    page_id   INTEGER NOT NULL,
+    url       TEXT NOT NULL,
+    domain    TEXT NOT NULL,
+    reason    TEXT NOT NULL
+);
+```
 
 ## Tantivy Schema
 
@@ -37,20 +55,18 @@ CREATE TABLE pages (
 | `content` | TEXT | yes | **no** | Plaintext for search only |
 | `domain` | STRING | yes | yes | Extracted from URL |
 | `visited_at` | DATE | yes | yes | Timestamp when page was captured |
-| `source_hash` | STRING | yes | yes | Hash for dedup |
+| `page_id` | U64 | no | yes | SQLite rowid, used to fetch HTML for snippets |
 
 ### Field Design Rationale
 
-- **Plaintext indexed, raw HTML in SQLite**: Indexing plaintext avoids polluting the search index with HTML markup. Raw HTML is stored in SQLite for snippet generation and future rendering.
-- **STRING** fields are indexed as single tokens (exact match). Used for URLs, domains, and hashes.
+- **Plaintext indexed, raw HTML in SQLite**: Indexing plaintext avoids polluting the search index with HTML markup. Raw HTML is stored in SQLite for snippet generation.
+- **STRING** fields are indexed as single tokens (exact match). Used for URLs, domains.
 - **TEXT** fields are tokenized and analyzed. Used for title and content (full-text search).
-- Snippets are generated at search time by fetching stored HTML from SQLite, converting to plaintext (via HTML→Markdown→plaintext pipeline), then extracting a keyword-in-context window.
 
-## Deduplication Strategy
+## Deduplication
 
-Before indexing a `PageSnapshot`, the system queries the index for a document with the same `source_hash`:
+Pages are deduplicated by `content_hash` (xxhash3_128 of the raw HTML). The page store checks for an existing hash before inserting.
 
-1. Create a `TermQuery` on the `source_hash` field
-2. If `Count > 0`, skip the document
-3. Otherwise, index it
+## Indexing Progress
 
+Instead of marking individual rows as indexed, the system uses a **watermark** — the highest `pages.id` that has been processed. Each ingestion cycle reads pages with `id > watermark`, indexes them, then advances the watermark. This lives in `app.db`, keeping `pages.db` owned entirely by the browser extension.

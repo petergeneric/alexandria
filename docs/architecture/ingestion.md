@@ -51,3 +51,7 @@ Ingestion and indexing are decoupled via a bounded crossbeam channel:
 - **Capacity**: Configurable (default: 1000)
 - **Backpressure**: If the queue is full, `try_send` returns false and the snapshot is dropped with a warning
 - **Power-aware**: The consumer side can pause/resume based on power state without losing enqueued data
+
+## Indexing Progress
+
+Progress is tracked via a watermark in `app.db` (the highest `pages.id` that has been indexed). Each cycle reads pages above the watermark, indexes them, then advances it. Pages that fail indexing are logged to the `ingest_log` table for visibility in the macOS app.

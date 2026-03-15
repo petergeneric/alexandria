@@ -55,3 +55,18 @@ If found, snippets are generated from stored HTML. If not found, snippets are om
 
 **Exit codes**: 0 = success (even if no results), 1 = error (index not found, query parse failure)
 
+### `import-firefox`
+
+Import browsing history from a Firefox `places.sqlite` database. This is a one-time helper for bootstrapping your index with existing history — not part of the normal capture flow.
+
+```
+alex import-firefox [OPTIONS]
+```
+
+| Argument/Flag | Description | Default |
+|---------------|-------------|---------|
+| `--places <PATH>` | Path to Firefox `places.sqlite` | `/tmp/places.sqlite` |
+| `--store` | Path to the page store database | auto-detected |
+
+Pages are filtered through the shared URL blocklist (banks, auth pages, checkout flows) and deduplicated by content hash before insertion.
+

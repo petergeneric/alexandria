@@ -31,7 +31,7 @@ Tantivy supports:
 
 Snippets are generated at search time using keyword-in-context (KWIC) extraction:
 
-1. Fetch stored raw HTML from SQLite via the page store (by `source_hash`)
+1. Fetch stored raw HTML from SQLite via the page store (by `page_id`)
 2. Filter HTML through site-specific selectors
 3. Convert to plaintext via HTML→Markdown→plaintext pipeline
 4. Find the earliest query keyword match in the plaintext

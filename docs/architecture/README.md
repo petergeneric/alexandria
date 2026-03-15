@@ -45,6 +45,8 @@
 | Index | `alexandria-core::index` | Tantivy schema, document storage, dedup |
 | Search | `alexandria-core::search` | Query parsing, field boosting, pagination |
 | Page Store | `alexandria-core::page_store` | SQLite storage for captured pages |
+| App DB | `alexandria-core::app_db` | Indexing watermark, schema revision, ingest failure log |
+| Blocklist | `alexandria-core::blocklist` | URL filtering (banks, auth, checkout pages) |
 | FFI | `alexandria-core::ffi` | UniFFI bindings for Swift integration |
 | CLI | `alexandria-cli` | Command-line interface (`alex`) |
 

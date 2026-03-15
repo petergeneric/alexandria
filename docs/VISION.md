@@ -2,7 +2,7 @@ This document outlines the vision of the project.
 
 The library of Alexandria took a copy of every book that passed through the port. The aim of this project is to do the same, but for every page a user reads online.
 The goal is to provide a secure personal searchable index of their browser history. It comprises two parts:
-1. A browser extension that takes snapshots of pages (extracting the text content from the DOM)
+1. A browser extension that captures raw page HTML
 2. A native front-end application (Swift) that communicates to a Rust back-end via FFI that accomplishes indexing/search functionality.
 
 
