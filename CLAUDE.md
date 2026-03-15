@@ -6,6 +6,17 @@ A tool that produces a fulltext index of every page you read on your browser.
 
 ## Build & Run
 
+Use Make targets instead of running cargo/swift/cp commands directly:
+
+- `make app` — full build: Rust lib → UniFFI bindings → Swift binary → .app bundle
+- `make rust` — build Rust static library and native messaging host (release)
+- `make bindings` — regenerate UniFFI Swift bindings from the Rust FFI interface
+- `make swift` — build the Swift binary (depends on rust + bindings)
+- `make bundle` — assemble the .app bundle (depends on swift)
+- `make extension` — build the Firefox extension .xpi
+- `make clean` — clean all build artifacts (cargo + swift + app bundle)
+
+CLI usage:
 ```bash
 cargo build --workspace
 ./target/debug/alex search "query"
@@ -46,7 +57,3 @@ cargo build --workspace
 - `clap` — CLI argument parsing
 - `dirs` — home directory expansion
 - `chrono`, `url`, `serde`, `serde_json`, `tracing`, `thiserror` — utilities
-
-## License
-
-AGPL-3.0-or-later
