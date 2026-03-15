@@ -129,7 +129,7 @@ $(EXTENSION_XPI): $(EXTENSION_SOURCES) $(EXTENSION_ICONS) extension/rules.js
 run: app
 	@pkill -x Alexandria 2>/dev/null || true
 	@echo "Launching Alexandria..."
-	@open $(APP_BUNDLE)
+	@open $(APP_BUNDLE) 2>/dev/null || { sleep 1 && open $(APP_BUNDLE); }
 
 clean:
 	cargo clean
