@@ -125,8 +125,9 @@ $(EXTENSION_XPI): $(EXTENSION_SOURCES) $(EXTENSION_ICONS) extension/rules.js
 	@echo "  make app && open target/Alexandria.app  (installs manifest on launch)"
 	@echo "  OR: ./scripts/install-native-host.sh --firefox"
 
-# Build, kill any running instance, and launch
+# Build, kill any running instance (and native host), and launch
 run: app
+	@pkill -x alexandria-native-host 2>/dev/null || true
 	@pkill -x Alexandria 2>/dev/null || true
 	@echo "Launching Alexandria..."
 	@open $(APP_BUNDLE) 2>/dev/null || { sleep 1 && open $(APP_BUNDLE); }

@@ -3,6 +3,9 @@ import Foundation
 struct NativeHostInstaller {
     private static let hostName = "alexandria"
     private static let firefoxExtensionId = "alexandria@works.peter"
+    // To find your Chrome extension ID: load the unpacked extension in chrome://extensions
+    // and copy the 32-character ID shown beneath the extension name.
+    private static let chromeExtensionId = "TODO_PASTE_CHROME_EXTENSION_ID_HERE"
 
     /// Path to the native host binary bundled inside the .app
     private static var bundledBinaryPath: String? {
@@ -53,7 +56,7 @@ struct NativeHostInstaller {
             "description": "Alexandria page capture native host",
             "path": binaryPath,
             "type": "stdio",
-            "allowed_origins": [String](),  // Chrome requires extension ID; left empty until configured
+            "allowed_origins": ["chrome-extension://\(chromeExtensionId)/"],
         ]
         writeManifest(manifest, to: dir.appendingPathComponent("\(hostName).json"))
     }
