@@ -16,3 +16,5 @@ tracing-subscriber = { workspace = true }
 chrono = { workspace = true }
 dirs = "6"
 serde_json = { workspace = true }
+rusqlite = { workspace = true }
+xxhash-rust = { workspace = true }

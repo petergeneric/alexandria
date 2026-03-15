@@ -90,6 +90,7 @@ bundle: $(SWIFT_BIN)
 EXTENSION_XPI = target/alexandria-extension.xpi
 EXTENSION_SOURCES = $(wildcard extension/*.js extension/*.html extension/*.json)
 EXTENSION_ICONS = extension/icon16.png extension/icon32.png extension/icon48.png extension/icon128.png
+BLOCKLIST_JSON = shared/blocklist.json
 
 # Step 4: Generate extension icons from SVG (requires rsvg-convert)
 extension-icons: $(EXTENSION_ICONS)
@@ -106,7 +107,11 @@ extension/icon%.png: $(ICON_SVG)
 # Build the Firefox extension .xpi
 extension: $(EXTENSION_XPI)
 
-$(EXTENSION_XPI): $(EXTENSION_SOURCES) $(EXTENSION_ICONS)
+# Regenerate rules.js from shared blocklist when the JSON changes
+extension/rules.js: $(BLOCKLIST_JSON) shared/generate_rules.py
+	python3 shared/generate_rules.py
+
+$(EXTENSION_XPI): $(EXTENSION_SOURCES) $(EXTENSION_ICONS) extension/rules.js
 	@mkdir -p target
 	cd extension && zip -r -FS ../$(EXTENSION_XPI) manifest.json *.js *.html *.png 2>/dev/null; true
 	@echo "Built $(EXTENSION_XPI)"
