@@ -49,6 +49,37 @@ pub struct IngestLogEntry {
     pub reason: String,
 }
 
+#[derive(uniffi::Record)]
+pub struct DailyPageCount {
+    pub day: String,
+    pub count: i64,
+}
+
+#[derive(uniffi::Record)]
+pub struct DayHourCell {
+    pub day_of_week: i32,
+    pub hour: i32,
+    pub visits: i64,
+    pub distinct_domains: i64,
+    pub compressed_bytes: i64,
+}
+
+#[derive(uniffi::Record)]
+pub struct TopDomain {
+    pub domain: String,
+    pub visit_count: i64,
+    pub total_bytes: i64,
+}
+
+#[derive(uniffi::Record)]
+pub struct SummaryCounts {
+    pub total: i64,
+    pub today: i64,
+    pub this_week: i64,
+    pub this_month: i64,
+    pub this_year: i64,
+}
+
 struct IngestFailure {
     page_id: i64,
     url: String,
@@ -379,6 +410,90 @@ impl AlexandriaEngine {
             AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             }
+        })
+    }
+
+    pub fn daily_page_counts(&self, store_path: String) -> Result<Vec<DailyPageCount>, AlexandriaError> {
+        let store =
+            PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::SearchFailed {
+                reason: e.to_string(),
+            })?;
+        let counts = store.daily_page_counts().map_err(|e| AlexandriaError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        Ok(counts
+            .into_iter()
+            .map(|(day, count)| DailyPageCount { day, count })
+            .collect())
+    }
+
+    pub fn daily_byte_counts(&self, store_path: String) -> Result<Vec<DailyPageCount>, AlexandriaError> {
+        let store =
+            PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::SearchFailed {
+                reason: e.to_string(),
+            })?;
+        let counts = store.daily_byte_counts().map_err(|e| AlexandriaError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        Ok(counts
+            .into_iter()
+            .map(|(day, count)| DailyPageCount { day, count })
+            .collect())
+    }
+
+    pub fn day_hour_breakdown(&self, store_path: String) -> Result<Vec<DayHourCell>, AlexandriaError> {
+        let store =
+            PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::SearchFailed {
+                reason: e.to_string(),
+            })?;
+        let breakdown = store.day_hour_breakdown().map_err(|e| AlexandriaError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        Ok(breakdown
+            .into_iter()
+            .map(|(d, h, v, dd, b)| DayHourCell {
+                day_of_week: d,
+                hour: h,
+                visits: v,
+                distinct_domains: dd,
+                compressed_bytes: b,
+            })
+            .collect())
+    }
+
+    pub fn top_domains(&self, store_path: String, limit: i64) -> Result<Vec<TopDomain>, AlexandriaError> {
+        let store =
+            PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::SearchFailed {
+                reason: e.to_string(),
+            })?;
+        let domains = store.top_domains(limit).map_err(|e| AlexandriaError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+        Ok(domains
+            .into_iter()
+            .map(|(domain, visit_count, total_bytes)| TopDomain {
+                domain,
+                visit_count,
+                total_bytes,
+            })
+            .collect())
+    }
+
+    pub fn summary_counts(&self, store_path: String) -> Result<SummaryCounts, AlexandriaError> {
+        let store =
+            PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::SearchFailed {
+                reason: e.to_string(),
+            })?;
+        let (total, today, this_week, this_month, this_year) =
+            store.summary_counts().map_err(|e| AlexandriaError::SearchFailed {
+                reason: e.to_string(),
+            })?;
+        Ok(SummaryCounts {
+            total,
+            today,
+            this_week,
+            this_month,
+            this_year,
         })
     }
 }

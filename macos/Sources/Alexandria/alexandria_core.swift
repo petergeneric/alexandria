@@ -415,6 +415,22 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt32: FfiConverterPrimitive {
+    typealias FfiType = Int32
+    typealias SwiftType = Int32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int32, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
     typealias FfiType = UInt64
     typealias SwiftType = UInt64
@@ -508,6 +524,12 @@ public protocol AlexandriaEngineProtocol : AnyObject {
     
     func clearIngestLog() throws 
     
+    func dailyByteCounts(storePath: String) throws  -> [DailyPageCount]
+    
+    func dailyPageCounts(storePath: String) throws  -> [DailyPageCount]
+    
+    func dayHourBreakdown(storePath: String) throws  -> [DayHourCell]
+    
     func deleteHistory(storePath: String) throws 
     
     func docCount() throws  -> UInt64
@@ -521,6 +543,10 @@ public protocol AlexandriaEngineProtocol : AnyObject {
     func reindex(storePath: String) throws  -> UInt64
     
     func search(query: String, limit: UInt32, offset: UInt32, storePath: String) throws  -> [AlexandriaSearchResult]
+    
+    func summaryCounts(storePath: String) throws  -> SummaryCounts
+    
+    func topDomains(storePath: String, limit: Int64) throws  -> [TopDomain]
     
 }
 
@@ -589,6 +615,30 @@ open func clearIngestLog()throws  {try rustCallWithError(FfiConverterTypeAlexand
 }
 }
     
+open func dailyByteCounts(storePath: String)throws  -> [DailyPageCount] {
+    return try  FfiConverterSequenceTypeDailyPageCount.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_daily_byte_counts(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),$0
+    )
+})
+}
+    
+open func dailyPageCounts(storePath: String)throws  -> [DailyPageCount] {
+    return try  FfiConverterSequenceTypeDailyPageCount.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_daily_page_counts(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),$0
+    )
+})
+}
+    
+open func dayHourBreakdown(storePath: String)throws  -> [DayHourCell] {
+    return try  FfiConverterSequenceTypeDayHourCell.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_day_hour_breakdown(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),$0
+    )
+})
+}
+    
 open func deleteHistory(storePath: String)throws  {try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
     uniffi_alexandria_core_fn_method_alexandriaengine_delete_history(self.uniffiClonePointer(),
         FfiConverterString.lower(storePath),$0
@@ -642,6 +692,23 @@ open func search(query: String, limit: UInt32, offset: UInt32, storePath: String
         FfiConverterUInt32.lower(limit),
         FfiConverterUInt32.lower(offset),
         FfiConverterString.lower(storePath),$0
+    )
+})
+}
+    
+open func summaryCounts(storePath: String)throws  -> SummaryCounts {
+    return try  FfiConverterTypeSummaryCounts.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_summary_counts(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),$0
+    )
+})
+}
+    
+open func topDomains(storePath: String, limit: Int64)throws  -> [TopDomain] {
+    return try  FfiConverterSequenceTypeTopDomain.lift(try rustCallWithError(FfiConverterTypeAlexandriaError.lift) {
+    uniffi_alexandria_core_fn_method_alexandriaengine_top_domains(self.uniffiClonePointer(),
+        FfiConverterString.lower(storePath),
+        FfiConverterInt64.lower(limit),$0
     )
 })
 }
@@ -796,6 +863,162 @@ public func FfiConverterTypeAlexandriaSearchResult_lift(_ buf: RustBuffer) throw
 #endif
 public func FfiConverterTypeAlexandriaSearchResult_lower(_ value: AlexandriaSearchResult) -> RustBuffer {
     return FfiConverterTypeAlexandriaSearchResult.lower(value)
+}
+
+
+public struct DailyPageCount {
+    public var day: String
+    public var count: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(day: String, count: Int64) {
+        self.day = day
+        self.count = count
+    }
+}
+
+
+
+extension DailyPageCount: Equatable, Hashable {
+    public static func ==(lhs: DailyPageCount, rhs: DailyPageCount) -> Bool {
+        if lhs.day != rhs.day {
+            return false
+        }
+        if lhs.count != rhs.count {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(day)
+        hasher.combine(count)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDailyPageCount: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DailyPageCount {
+        return
+            try DailyPageCount(
+                day: FfiConverterString.read(from: &buf), 
+                count: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DailyPageCount, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.day, into: &buf)
+        FfiConverterInt64.write(value.count, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDailyPageCount_lift(_ buf: RustBuffer) throws -> DailyPageCount {
+    return try FfiConverterTypeDailyPageCount.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDailyPageCount_lower(_ value: DailyPageCount) -> RustBuffer {
+    return FfiConverterTypeDailyPageCount.lower(value)
+}
+
+
+public struct DayHourCell {
+    public var dayOfWeek: Int32
+    public var hour: Int32
+    public var visits: Int64
+    public var distinctDomains: Int64
+    public var compressedBytes: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(dayOfWeek: Int32, hour: Int32, visits: Int64, distinctDomains: Int64, compressedBytes: Int64) {
+        self.dayOfWeek = dayOfWeek
+        self.hour = hour
+        self.visits = visits
+        self.distinctDomains = distinctDomains
+        self.compressedBytes = compressedBytes
+    }
+}
+
+
+
+extension DayHourCell: Equatable, Hashable {
+    public static func ==(lhs: DayHourCell, rhs: DayHourCell) -> Bool {
+        if lhs.dayOfWeek != rhs.dayOfWeek {
+            return false
+        }
+        if lhs.hour != rhs.hour {
+            return false
+        }
+        if lhs.visits != rhs.visits {
+            return false
+        }
+        if lhs.distinctDomains != rhs.distinctDomains {
+            return false
+        }
+        if lhs.compressedBytes != rhs.compressedBytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(dayOfWeek)
+        hasher.combine(hour)
+        hasher.combine(visits)
+        hasher.combine(distinctDomains)
+        hasher.combine(compressedBytes)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDayHourCell: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DayHourCell {
+        return
+            try DayHourCell(
+                dayOfWeek: FfiConverterInt32.read(from: &buf), 
+                hour: FfiConverterInt32.read(from: &buf), 
+                visits: FfiConverterInt64.read(from: &buf), 
+                distinctDomains: FfiConverterInt64.read(from: &buf), 
+                compressedBytes: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DayHourCell, into buf: inout [UInt8]) {
+        FfiConverterInt32.write(value.dayOfWeek, into: &buf)
+        FfiConverterInt32.write(value.hour, into: &buf)
+        FfiConverterInt64.write(value.visits, into: &buf)
+        FfiConverterInt64.write(value.distinctDomains, into: &buf)
+        FfiConverterInt64.write(value.compressedBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDayHourCell_lift(_ buf: RustBuffer) throws -> DayHourCell {
+    return try FfiConverterTypeDayHourCell.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDayHourCell_lower(_ value: DayHourCell) -> RustBuffer {
+    return FfiConverterTypeDayHourCell.lower(value)
 }
 
 
@@ -963,6 +1186,170 @@ public func FfiConverterTypePendingStatus_lower(_ value: PendingStatus) -> RustB
 }
 
 
+public struct SummaryCounts {
+    public var total: Int64
+    public var today: Int64
+    public var thisWeek: Int64
+    public var thisMonth: Int64
+    public var thisYear: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(total: Int64, today: Int64, thisWeek: Int64, thisMonth: Int64, thisYear: Int64) {
+        self.total = total
+        self.today = today
+        self.thisWeek = thisWeek
+        self.thisMonth = thisMonth
+        self.thisYear = thisYear
+    }
+}
+
+
+
+extension SummaryCounts: Equatable, Hashable {
+    public static func ==(lhs: SummaryCounts, rhs: SummaryCounts) -> Bool {
+        if lhs.total != rhs.total {
+            return false
+        }
+        if lhs.today != rhs.today {
+            return false
+        }
+        if lhs.thisWeek != rhs.thisWeek {
+            return false
+        }
+        if lhs.thisMonth != rhs.thisMonth {
+            return false
+        }
+        if lhs.thisYear != rhs.thisYear {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(total)
+        hasher.combine(today)
+        hasher.combine(thisWeek)
+        hasher.combine(thisMonth)
+        hasher.combine(thisYear)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSummaryCounts: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SummaryCounts {
+        return
+            try SummaryCounts(
+                total: FfiConverterInt64.read(from: &buf), 
+                today: FfiConverterInt64.read(from: &buf), 
+                thisWeek: FfiConverterInt64.read(from: &buf), 
+                thisMonth: FfiConverterInt64.read(from: &buf), 
+                thisYear: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SummaryCounts, into buf: inout [UInt8]) {
+        FfiConverterInt64.write(value.total, into: &buf)
+        FfiConverterInt64.write(value.today, into: &buf)
+        FfiConverterInt64.write(value.thisWeek, into: &buf)
+        FfiConverterInt64.write(value.thisMonth, into: &buf)
+        FfiConverterInt64.write(value.thisYear, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSummaryCounts_lift(_ buf: RustBuffer) throws -> SummaryCounts {
+    return try FfiConverterTypeSummaryCounts.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSummaryCounts_lower(_ value: SummaryCounts) -> RustBuffer {
+    return FfiConverterTypeSummaryCounts.lower(value)
+}
+
+
+public struct TopDomain {
+    public var domain: String
+    public var visitCount: Int64
+    public var totalBytes: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(domain: String, visitCount: Int64, totalBytes: Int64) {
+        self.domain = domain
+        self.visitCount = visitCount
+        self.totalBytes = totalBytes
+    }
+}
+
+
+
+extension TopDomain: Equatable, Hashable {
+    public static func ==(lhs: TopDomain, rhs: TopDomain) -> Bool {
+        if lhs.domain != rhs.domain {
+            return false
+        }
+        if lhs.visitCount != rhs.visitCount {
+            return false
+        }
+        if lhs.totalBytes != rhs.totalBytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(domain)
+        hasher.combine(visitCount)
+        hasher.combine(totalBytes)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTopDomain: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TopDomain {
+        return
+            try TopDomain(
+                domain: FfiConverterString.read(from: &buf), 
+                visitCount: FfiConverterInt64.read(from: &buf), 
+                totalBytes: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TopDomain, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.domain, into: &buf)
+        FfiConverterInt64.write(value.visitCount, into: &buf)
+        FfiConverterInt64.write(value.totalBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTopDomain_lift(_ buf: RustBuffer) throws -> TopDomain {
+    return try FfiConverterTypeTopDomain.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTopDomain_lower(_ value: TopDomain) -> RustBuffer {
+    return FfiConverterTypeTopDomain.lower(value)
+}
+
+
 public enum AlexandriaError {
 
     
@@ -1089,6 +1476,56 @@ fileprivate struct FfiConverterSequenceTypeAlexandriaSearchResult: FfiConverterR
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDailyPageCount: FfiConverterRustBuffer {
+    typealias SwiftType = [DailyPageCount]
+
+    public static func write(_ value: [DailyPageCount], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDailyPageCount.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DailyPageCount] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DailyPageCount]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDailyPageCount.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDayHourCell: FfiConverterRustBuffer {
+    typealias SwiftType = [DayHourCell]
+
+    public static func write(_ value: [DayHourCell], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDayHourCell.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DayHourCell] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DayHourCell]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDayHourCell.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeIngestLogEntry: FfiConverterRustBuffer {
     typealias SwiftType = [IngestLogEntry]
 
@@ -1106,6 +1543,31 @@ fileprivate struct FfiConverterSequenceTypeIngestLogEntry: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeIngestLogEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeTopDomain: FfiConverterRustBuffer {
+    typealias SwiftType = [TopDomain]
+
+    public static func write(_ value: [TopDomain], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTopDomain.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TopDomain] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TopDomain]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTopDomain.read(from: &buf))
         }
         return seq
     }
@@ -1129,6 +1591,15 @@ private var initializationResult: InitializationResult = {
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_clear_ingest_log() != 29108) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_daily_byte_counts() != 55249) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_daily_page_counts() != 18875) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_day_hour_breakdown() != 25192) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_delete_history() != 511) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -1148,6 +1619,12 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_method_alexandriaengine_search() != 4659) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_summary_counts() != 42013) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_alexandria_core_checksum_method_alexandriaengine_top_domains() != 60871) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_alexandria_core_checksum_constructor_alexandriaengine_open() != 48129) {

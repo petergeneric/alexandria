@@ -59,6 +59,30 @@ class SearchEngineWrapper {
         _ = try? engine.clearIngestLog()
     }
 
+    func dailyPageCounts(storePath: String) -> [DailyPageCount] {
+        guard let counts = try? engine.dailyPageCounts(storePath: storePath) else { return [] }
+        return counts
+    }
+
+    func dailyByteCounts(storePath: String) -> [DailyPageCount] {
+        guard let counts = try? engine.dailyByteCounts(storePath: storePath) else { return [] }
+        return counts
+    }
+
+    func dayHourBreakdown(storePath: String) -> [DayHourCell] {
+        guard let cells = try? engine.dayHourBreakdown(storePath: storePath) else { return [] }
+        return cells
+    }
+
+    func topDomains(storePath: String, limit: Int = 50) -> [TopDomain] {
+        guard let domains = try? engine.topDomains(storePath: storePath, limit: Int64(limit)) else { return [] }
+        return domains
+    }
+
+    func summaryCounts(storePath: String) -> SummaryCounts? {
+        return try? engine.summaryCounts(storePath: storePath)
+    }
+
     func search(query: String, limit: Int = 20, offset: Int = 0, storePath: String = "") -> [SearchResult] {
         guard !query.isEmpty else { return [] }
 

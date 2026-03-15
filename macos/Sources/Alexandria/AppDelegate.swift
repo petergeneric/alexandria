@@ -6,6 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var searchPanel: SearchPanel?
     private var settingsWindow: NSWindow?
     private var logWindow: NSWindow?
+    private var statsWindow: NSWindow?
 
     private var ingester: Ingester?
     private var engine: SearchEngineWrapper?
@@ -92,6 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(NSMenuItem.separator())
         }
 
+        menu.addItem(NSMenuItem(title: "Statistics...", action: #selector(openStatistics), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit Alexandria", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
@@ -99,6 +101,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.performClick(nil)
         // Clear menu so left-click goes back to action-based handling
         statusItem.menu = nil
+    }
+
+    @objc private func openStatistics() {
+        if statsWindow == nil {
+            let hostingView = NSHostingView(rootView: StatisticsView(engine: engine))
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+                styleMask: [.titled, .closable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Alexandria Statistics"
+            window.isReleasedWhenClosed = false
+            window.contentView = hostingView
+            window.center()
+            statsWindow = window
+        }
+        searchPanel?.close()
+        statsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func openSettings() {

@@ -164,6 +164,94 @@ impl PageStore {
         self.db.execute_batch("DELETE FROM pages")?;
         Ok(())
     }
+
+    /// Returns (date_string, count) pairs for each day with captured pages.
+    pub fn daily_page_counts(&self) -> Result<Vec<(String, i64)>, PageStoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT date(captured_at, 'unixepoch', 'localtime') as day, COUNT(*)
+             FROM pages GROUP BY day ORDER BY day",
+        )?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Returns (date_string, total_compressed_bytes) pairs for each day.
+    pub fn daily_byte_counts(&self) -> Result<Vec<(String, i64)>, PageStoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT date(captured_at, 'unixepoch', 'localtime') as day, SUM(length(html))
+             FROM pages GROUP BY day ORDER BY day",
+        )?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get::<_, i64>(1)?)))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Returns (day_of_week, hour, visits, distinct_domains, bytes) for each (dow, hour) bucket.
+    pub fn day_hour_breakdown(&self) -> Result<Vec<(i32, i32, i64, i64, i64)>, PageStoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT CAST(strftime('%w', captured_at, 'unixepoch', 'localtime') AS INTEGER),
+                    CAST(strftime('%H', captured_at, 'unixepoch', 'localtime') AS INTEGER),
+                    COUNT(*),
+                    COUNT(DISTINCT domain)
+             FROM pages GROUP BY 1, 2",
+        )?;
+        let visit_rows: Vec<(i32, i32, i64, i64)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut stmt2 = self.db.prepare(
+            "SELECT CAST(strftime('%w', captured_at, 'unixepoch', 'localtime') AS INTEGER),
+                    CAST(strftime('%H', captured_at, 'unixepoch', 'localtime') AS INTEGER),
+                    SUM(length(html))
+             FROM pages WHERE length(html) > 512 GROUP BY 1, 2",
+        )?;
+        let byte_rows: std::collections::HashMap<(i32, i32), i64> = stmt2
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get::<_, i64>(2)?)))?
+            .filter_map(|r| r.ok())
+            .map(|(d, h, b)| ((d, h), b))
+            .collect();
+
+        Ok(visit_rows
+            .into_iter()
+            .map(|(d, h, v, dd)| {
+                let bytes = byte_rows.get(&(d, h)).copied().unwrap_or(0);
+                (d, h, v, dd, bytes)
+            })
+            .collect())
+    }
+
+    /// Returns (domain, visit_count, total_compressed_bytes) for top domains.
+    pub fn top_domains(&self, limit: i64) -> Result<Vec<(String, i64, i64)>, PageStoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT domain, COUNT(*), SUM(length(html))
+             FROM pages GROUP BY domain ORDER BY COUNT(*) DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get::<_, i64>(2)?))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Returns (total, today, this_week, this_month, this_year).
+    pub fn summary_counts(&self) -> Result<(i64, i64, i64, i64, i64), PageStoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT COUNT(*),
+               SUM(CASE WHEN date(captured_at,'unixepoch','localtime') = date('now','localtime') THEN 1 ELSE 0 END),
+               SUM(CASE WHEN captured_at >= strftime('%s', date('now','localtime','weekday 0','-6 days'), 'utc') THEN 1 ELSE 0 END),
+               SUM(CASE WHEN date(captured_at,'unixepoch','localtime') >= date('now','start of month','localtime') THEN 1 ELSE 0 END),
+               SUM(CASE WHEN date(captured_at,'unixepoch','localtime') >= date('now','start of year','localtime') THEN 1 ELSE 0 END)
+             FROM pages",
+        )?;
+        stmt.query_row([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?.unwrap_or(0),
+                row.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+            ))
+        })
+        .map_err(Into::into)
+    }
 }
 
 #[cfg(test)]
@@ -281,5 +369,71 @@ mod tests {
         let hashes = store.recent_content_hashes(10).unwrap();
         assert_eq!(hashes.len(), 3);
         assert_eq!(hashes[0], h1);
+    }
+
+    #[test]
+    fn test_daily_page_counts() {
+        let (_path, store) = temp_db();
+        // Two pages on same day, one on a different day
+        store.insert("https://a.com", "A", b"a", "a.com", 1700000000, &hash(b"a")).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", 1700000100, &hash(b"b")).unwrap();
+        store.insert("https://c.com", "C", b"c", "c.com", 1700100000, &hash(b"c")).unwrap();
+
+        let counts = store.daily_page_counts().unwrap();
+        assert!(counts.len() >= 1);
+        let total: i64 = counts.iter().map(|(_, c)| c).sum();
+        assert_eq!(total, 3);
+    }
+
+    #[test]
+    fn test_day_hour_breakdown() {
+        let (_path, store) = temp_db();
+        store.insert("https://a.com", "A", b"a", "a.com", 1700000000, &hash(b"a")).unwrap();
+        store.insert("https://b.com", "B", b"b", "b.com", 1700000100, &hash(b"b")).unwrap();
+
+        let breakdown = store.day_hour_breakdown().unwrap();
+        assert!(!breakdown.is_empty());
+        let total_visits: i64 = breakdown.iter().map(|(_, _, v, _, _)| v).sum();
+        assert_eq!(total_visits, 2);
+    }
+
+    #[test]
+    fn test_top_domains() {
+        let (_path, store) = temp_db();
+        store.insert("https://a.com/1", "A1", b"a1", "a.com", 1000, &hash(b"a1")).unwrap();
+        store.insert("https://a.com/2", "A2", b"a2", "a.com", 2000, &hash(b"a2")).unwrap();
+        store.insert("https://b.com/1", "B1", b"b1", "b.com", 3000, &hash(b"b1")).unwrap();
+
+        let top = store.top_domains(10).unwrap();
+        assert_eq!(top.len(), 2);
+        assert_eq!(top[0].0, "a.com");
+        assert_eq!(top[0].1, 2);
+        assert_eq!(top[1].0, "b.com");
+        assert_eq!(top[1].1, 1);
+    }
+
+    #[test]
+    fn test_summary_counts() {
+        let (_path, store) = temp_db();
+        store.insert("https://a.com", "A", b"a", "a.com", 1000, &hash(b"a")).unwrap();
+
+        let (total, today, this_week, this_month, this_year) = store.summary_counts().unwrap();
+        assert_eq!(total, 1);
+        // The old timestamp won't be today/this week/etc
+        assert_eq!(today, 0);
+        assert_eq!(this_week, 0);
+        assert_eq!(this_month, 0);
+        assert_eq!(this_year, 0);
+    }
+
+    #[test]
+    fn test_summary_counts_empty() {
+        let (_path, store) = temp_db();
+        let (total, today, this_week, this_month, this_year) = store.summary_counts().unwrap();
+        assert_eq!(total, 0);
+        assert_eq!(today, 0);
+        assert_eq!(this_week, 0);
+        assert_eq!(this_month, 0);
+        assert_eq!(this_year, 0);
     }
 }
