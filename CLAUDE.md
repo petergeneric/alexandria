@@ -45,7 +45,6 @@ cargo build --workspace
 - `crossbeam-channel` — bounded channel for ingestion queue
 - `clap` — CLI argument parsing
 - `dirs` — home directory expansion
-- `md-5` — MD5 hashing for source deduplication
 - `chrono`, `url`, `serde`, `serde_json`, `tracing`, `thiserror` — utilities
 
 ## License

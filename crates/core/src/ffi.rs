@@ -39,28 +39,76 @@ pub struct PendingStatus {
     pub oldest_captured_at_secs: Option<i64>,
 }
 
-fn snapshots_from_pages(pages: &[StoredPage]) -> Vec<PageSnapshot> {
-    pages
-        .iter()
-        .map(|p| {
-            // Content starting with '<' is stored HTML — run filter + plaintext pipeline.
-            // Otherwise it's already plaintext from capture time.
-            let content = if p.html.starts_with('<') {
-                let filtered_html = filter::filter_html(&p.html, &p.domain);
-                extract::html_to_plaintext(&filtered_html)
-            } else {
-                p.html.clone()
-            };
-            PageSnapshot {
-                page_id: p.id,
-                url: p.url.clone(),
-                title: p.title.clone(),
-                content,
-                domain: p.domain.clone(),
-                captured_at: p.captured_at,
+#[derive(uniffi::Record)]
+pub struct IngestLogEntry {
+    pub id: i64,
+    pub timestamp: String,
+    pub page_id: i64,
+    pub url: String,
+    pub domain: String,
+    pub reason: String,
+}
+
+struct IngestFailure {
+    page_id: i64,
+    url: String,
+    domain: String,
+    reason: String,
+}
+
+struct ConvertedPages {
+    snapshots: Vec<PageSnapshot>,
+    failures: Vec<IngestFailure>,
+}
+
+fn snapshots_from_pages(pages: &[StoredPage]) -> ConvertedPages {
+    let mut snapshots = Vec::new();
+    let mut failures = Vec::new();
+
+    for p in pages {
+        let content = if p.html.starts_with('<') {
+            let html = p.html.clone();
+            let domain = p.domain.clone();
+            // Spawn with 8 MB stack to handle deeply nested HTML without overflow,
+            // and catch_unwind to skip pages that still manage to blow the stack.
+            let result = std::thread::Builder::new()
+                .stack_size(8 * 1024 * 1024)
+                .spawn(move || {
+                    std::panic::catch_unwind(|| {
+                        let filtered_html = filter::filter_html(&html, &domain);
+                        extract::html_to_plaintext(&filtered_html)
+                    })
+                })
+                .ok()
+                .and_then(|h| h.join().ok())
+                .and_then(|r| r.ok());
+            match result {
+                Some(text) => text,
+                None => {
+                    tracing::warn!(url = %p.url, "Skipping page: HTML conversion failed (deeply nested HTML)");
+                    failures.push(IngestFailure {
+                        page_id: p.id,
+                        url: p.url.clone(),
+                        domain: p.domain.clone(),
+                        reason: "HTML conversion failed (deeply nested HTML)".into(),
+                    });
+                    continue;
+                }
             }
-        })
-        .collect()
+        } else {
+            p.html.clone()
+        };
+        snapshots.push(PageSnapshot {
+            page_id: p.id,
+            url: p.url.clone(),
+            title: p.title.clone(),
+            content,
+            domain: p.domain.clone(),
+            captured_at: p.captured_at,
+        });
+    }
+
+    ConvertedPages { snapshots, failures }
 }
 
 #[derive(uniffi::Object)]
@@ -215,10 +263,14 @@ impl AlexandriaEngine {
             }
 
             let max_id = pages.iter().map(|p| p.id).max().unwrap_or(watermark);
-            let snapshots = snapshots_from_pages(&pages);
+            let converted = snapshots_from_pages(&pages);
+
+            for f in &converted.failures {
+                let _ = app_db.log_ingest_failure(f.page_id, &f.url, &f.domain, &f.reason);
+            }
 
             let indexed =
-                index_snapshots(&mut writer, &fields, snapshots).map_err(|e| {
+                index_snapshots(&mut writer, &fields, converted.snapshots).map_err(|e| {
                     AlexandriaError::IngestFailed {
                         reason: e.to_string(),
                     }
@@ -272,7 +324,11 @@ impl AlexandriaEngine {
         }
 
         let max_id = pages.iter().map(|p| p.id).max().unwrap_or(watermark);
-        let snapshots = snapshots_from_pages(&pages);
+        let converted = snapshots_from_pages(&pages);
+
+        for f in &converted.failures {
+            let _ = app_db.log_ingest_failure(f.page_id, &f.url, &f.domain, &f.reason);
+        }
 
         let fields = SchemaFields::from_index(&self.index).map_err(|e| {
             AlexandriaError::IngestFailed {
@@ -287,7 +343,7 @@ impl AlexandriaEngine {
             })?;
 
         let indexed =
-            index_snapshots(&mut writer, &fields, snapshots).map_err(|e| {
+            index_snapshots(&mut writer, &fields, converted.snapshots).map_err(|e| {
                 AlexandriaError::IngestFailed {
                     reason: e.to_string(),
                 }
@@ -298,5 +354,31 @@ impl AlexandriaEngine {
         })?;
 
         Ok(indexed as u64)
+    }
+
+    pub fn recent_ingest_failures(&self, limit: u32) -> Result<Vec<IngestLogEntry>, AlexandriaError> {
+        let app_db = self.app_db.lock().unwrap();
+        let entries = app_db.recent_ingest_failures(limit).map_err(|e| {
+            AlexandriaError::SearchFailed {
+                reason: e.to_string(),
+            }
+        })?;
+        Ok(entries.into_iter().map(|e| IngestLogEntry {
+            id: e.id,
+            timestamp: e.timestamp,
+            page_id: e.page_id,
+            url: e.url,
+            domain: e.domain,
+            reason: e.reason,
+        }).collect())
+    }
+
+    pub fn clear_ingest_log(&self) -> Result<(), AlexandriaError> {
+        let app_db = self.app_db.lock().unwrap();
+        app_db.clear_ingest_log().map_err(|e| {
+            AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            }
+        })
     }
 }

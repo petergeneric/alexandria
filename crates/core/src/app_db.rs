@@ -29,6 +29,14 @@ impl AppDb {
             "CREATE TABLE IF NOT EXISTS meta (
                 key   TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ingest_log (
+                id        INTEGER PRIMARY KEY,
+                timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                page_id   INTEGER NOT NULL,
+                url       TEXT NOT NULL,
+                domain    TEXT NOT NULL,
+                reason    TEXT NOT NULL
             );",
         )?;
         Ok(Self { db })
@@ -77,6 +85,52 @@ impl AppDb {
         )?;
         Ok(())
     }
+
+    pub fn log_ingest_failure(
+        &self,
+        page_id: i64,
+        url: &str,
+        domain: &str,
+        reason: &str,
+    ) -> Result<(), AppDbError> {
+        self.db.execute(
+            "INSERT INTO ingest_log (page_id, url, domain, reason) VALUES (?1, ?2, ?3, ?4)",
+            params![page_id, url, domain, reason],
+        )?;
+        Ok(())
+    }
+
+    pub fn recent_ingest_failures(&self, limit: u32) -> Result<Vec<LogEntry>, AppDbError> {
+        let mut stmt = self.db.prepare(
+            "SELECT id, timestamp, page_id, url, domain, reason
+             FROM ingest_log ORDER BY id DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok(LogEntry {
+                id: row.get(0)?,
+                timestamp: row.get(1)?,
+                page_id: row.get(2)?,
+                url: row.get(3)?,
+                domain: row.get(4)?,
+                reason: row.get(5)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    pub fn clear_ingest_log(&self) -> Result<(), AppDbError> {
+        self.db.execute("DELETE FROM ingest_log", [])?;
+        Ok(())
+    }
+}
+
+pub struct LogEntry {
+    pub id: i64,
+    pub timestamp: String,
+    pub page_id: i64,
+    pub url: String,
+    pub domain: String,
+    pub reason: String,
 }
 
 #[cfg(test)]
@@ -119,5 +173,41 @@ mod tests {
         assert_eq!(db.get_schema_revision().unwrap(), None);
         db.set_schema_revision(1).unwrap();
         assert_eq!(db.get_schema_revision().unwrap(), Some(1));
+    }
+
+    #[test]
+    fn test_log_ingest_failure_and_query() {
+        let (_path, db) = temp_db();
+        db.log_ingest_failure(1, "https://example.com/a", "example.com", "deeply nested HTML").unwrap();
+        db.log_ingest_failure(2, "https://example.com/b", "example.com", "stack overflow").unwrap();
+
+        let entries = db.recent_ingest_failures(10).unwrap();
+        assert_eq!(entries.len(), 2);
+        // Most recent first
+        assert_eq!(entries[0].page_id, 2);
+        assert_eq!(entries[1].page_id, 1);
+        assert_eq!(entries[0].reason, "stack overflow");
+        assert_eq!(entries[1].url, "https://example.com/a");
+        assert!(!entries[0].timestamp.is_empty());
+    }
+
+    #[test]
+    fn test_log_ingest_failure_limit() {
+        let (_path, db) = temp_db();
+        for i in 0..5 {
+            db.log_ingest_failure(i, &format!("https://example.com/{i}"), "example.com", "fail").unwrap();
+        }
+        let entries = db.recent_ingest_failures(3).unwrap();
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].page_id, 4);
+    }
+
+    #[test]
+    fn test_clear_ingest_log() {
+        let (_path, db) = temp_db();
+        db.log_ingest_failure(1, "https://example.com", "example.com", "fail").unwrap();
+        assert_eq!(db.recent_ingest_failures(10).unwrap().len(), 1);
+        db.clear_ingest_log().unwrap();
+        assert_eq!(db.recent_ingest_failures(10).unwrap().len(), 0);
     }
 }

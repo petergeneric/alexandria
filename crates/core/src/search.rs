@@ -107,14 +107,24 @@ impl SearchEngine {
             // Otherwise it's already plaintext from capture time.
             let content_snippet = store
                 .and_then(|s| s.get_html_by_id(page_id as i64).ok().flatten())
-                .map(|content| {
+                .and_then(|content| {
                     let plaintext = if content.starts_with('<') {
-                        let filtered = filter::filter_html(&content, &domain);
-                        extract::html_to_plaintext(&filtered)
+                        let domain = domain.clone();
+                        std::thread::Builder::new()
+                            .stack_size(8 * 1024 * 1024)
+                            .spawn(move || {
+                                std::panic::catch_unwind(|| {
+                                    let filtered = filter::filter_html(&content, &domain);
+                                    extract::html_to_plaintext(&filtered)
+                                })
+                            })
+                            .ok()
+                            .and_then(|h| h.join().ok())
+                            .and_then(|r| r.ok())?
                     } else {
                         content
                     };
-                    kwic_snippet(&plaintext, query_str, 200)
+                    Some(kwic_snippet(&plaintext, query_str, 200))
                 })
                 .unwrap_or_default();
 
