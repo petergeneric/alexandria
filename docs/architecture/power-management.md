@@ -1,3 +1,5 @@
+![LLM Generated](../llm-generated.svg)
+
 # Power Management
 
 ## Goal

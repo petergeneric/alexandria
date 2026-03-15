@@ -1,3 +1,5 @@
+![LLM Generated](../llm-generated.svg)
+
 # Data Model
 
 ## SQLite Page Store (`pages.db`)
