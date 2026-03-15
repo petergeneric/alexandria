@@ -61,6 +61,7 @@ struct StatisticsView: View {
                 }
             }
         }
+        .modifier(HideSidebarToggle())
         .onAppear { loadData() }
     }
 
@@ -80,6 +81,16 @@ struct StatisticsView: View {
                 summary = sc
                 isLoading = false
             }
+        }
+    }
+}
+
+private struct HideSidebarToggle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content.toolbar(removing: .sidebarToggle)
+        } else {
+            content
         }
     }
 }
