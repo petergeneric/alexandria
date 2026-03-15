@@ -96,6 +96,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 defer: false
             )
             window.title = "Alexandria Settings"
+            window.isReleasedWhenClosed = false
             window.contentView = hostingView
             window.center()
             settingsWindow = window
