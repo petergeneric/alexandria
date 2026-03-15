@@ -174,13 +174,17 @@ class SearchViewModel: ObservableObject {
         }
     }
 
+    func clearSearch() {
+        query = ""
+        results = []
+        selectedDateRange = .all
+        selectedDomains.removeAll()
+    }
+
     func clearIfStale() {
         guard let lastSearch = lastSearchTime else { return }
         if Date().timeIntervalSince(lastSearch) > 600 {
-            query = ""
-            results = []
-            selectedDateRange = .all
-            selectedDomains.removeAll()
+            clearSearch()
         }
     }
 

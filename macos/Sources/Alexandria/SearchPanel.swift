@@ -25,6 +25,7 @@ class SearchPanel: NSPanel {
         // Allow Esc to close
         _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 {
+                self?.viewModel.clearSearch()
                 self?.close()
                 return nil
             }
