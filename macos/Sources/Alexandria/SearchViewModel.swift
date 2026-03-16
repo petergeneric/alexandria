@@ -175,6 +175,8 @@ class SearchViewModel: ObservableObject {
     }
 
     func clearSearch() {
+        debounceTask?.cancel()
+        debounceTask = nil
         query = ""
         results = []
         selectedDateRange = .all
@@ -190,7 +192,9 @@ class SearchViewModel: ObservableObject {
 
     static func resolveIndexPath() -> String {
         let fm = FileManager.default
-        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return NSHomeDirectory() + "/Library/Application Support/works.peter.alexandria/index"
+        }
         let indexDir = appSupport.appendingPathComponent("works.peter.alexandria/index")
         let path = indexDir.path
 

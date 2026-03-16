@@ -168,7 +168,11 @@
 
   var INTERACTION_EVENTS = ["click", "scroll", "keydown"];
 
+  var engagementSetup = false;
+
   function setupEngagement() {
+    if (engagementSetup) return;
+    engagementSetup = true;
     for (var i = 0; i < INTERACTION_EVENTS.length; i++) {
       window.addEventListener(INTERACTION_EVENTS[i], onInteraction, {
         once: true,

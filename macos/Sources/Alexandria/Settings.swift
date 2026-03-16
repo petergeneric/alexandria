@@ -4,12 +4,16 @@ class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
     static let defaultStorePath: String = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return NSHomeDirectory() + "/Library/Application Support/works.peter.alexandria/pages.db"
+        }
         return appSupport.appendingPathComponent("works.peter.alexandria/pages.db").path
     }()
 
     static let defaultAppDbPath: String = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return NSHomeDirectory() + "/Library/Application Support/works.peter.alexandria/app.db"
+        }
         return appSupport.appendingPathComponent("works.peter.alexandria/app.db").path
     }()
 

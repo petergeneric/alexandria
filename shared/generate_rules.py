@@ -112,14 +112,8 @@ var AlexRules = (function () {{
 
   function matchesDomain(hostname, pattern) {{
     if (hostname === pattern) return true;
-    if (hostname.endsWith("." + pattern)) return true;
+    if (pattern.indexOf(".") !== -1 && hostname.endsWith("." + pattern)) return true;
     return false;
-  }}
-
-  function globToRegex(glob) {{
-    var escaped = glob.replace(/[.+^${{}}()|[\\]\\\\]/g, "\\\\$&");
-    escaped = escaped.replace(/\\*/g, ".*").replace(/\\?/g, ".");
-    return new RegExp("^" + escaped + "$");
   }}
 
   // Parse URL and check against internal hard blocks (banks, auth, etc.).
@@ -171,7 +165,6 @@ var AlexRules = (function () {{
     shouldSkipMime: shouldSkipMime,
     shouldAutoSave: shouldAutoSave,
     matchesDomain: matchesDomain,
-    globToRegex: globToRegex,
   }};
 }})();
 

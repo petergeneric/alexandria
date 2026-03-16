@@ -32,16 +32,18 @@ class Ingester {
         NotificationCenter.default.removeObserver(self)
         if let source = powerSourceRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
+            Unmanaged.passUnretained(self).release()
         }
     }
 
     private func installPowerSourceObserver() {
-        let context = Unmanaged.passUnretained(self).toOpaque()
+        let context = Unmanaged.passRetained(self).toOpaque()
         guard let source = IOPSNotificationCreateRunLoopSource({ context in
             guard let context = context else { return }
             let ingester = Unmanaged<Ingester>.fromOpaque(context).takeUnretainedValue()
             ingester.handlePowerSourceChange()
         }, context)?.takeRetainedValue() else {
+            Unmanaged<Ingester>.fromOpaque(context).release()
             return
         }
         powerSourceRunLoopSource = source

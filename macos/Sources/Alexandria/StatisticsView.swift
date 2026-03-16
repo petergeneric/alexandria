@@ -181,7 +181,7 @@ private struct OverviewPanel: View {
     }
 
     private func recentDailyDates(days: Int) -> [(Date, Int64)] {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date())!
+        guard let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) else { return [] }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         let cutoffStr = formatter.string(from: cutoff)
@@ -372,7 +372,8 @@ private struct ContributionGraphPanel: View {
             var week: [String] = []
             for _ in 0..<7 {
                 week.append(formatter.string(from: current))
-                current = calendar.date(byAdding: .day, value: 1, to: current)!
+                guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
+                current = next
             }
             weeks.append(week)
         }
@@ -417,7 +418,8 @@ private struct ContributionGraphPanel: View {
         let p25 = values[values.count / 4]
         let p50 = values[values.count / 2]
         let p75 = values[values.count * 3 / 4]
-        return [max(1, p25), max(p25 + 1, p50), max(p50 + 1, p75), max(p75 + 1, p75 + 1)]
+        let maxValue = values.last ?? p75
+        return [max(1, p25), max(p25 + 1, p50), max(p50 + 1, p75), max(p75 + 1, maxValue)]
     }
 
     private func cellColor(count: Int64, thresholds: [Int64]) -> Color {

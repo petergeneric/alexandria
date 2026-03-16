@@ -32,8 +32,8 @@ function sendToNative(data) {
     return;
   }
 
-  var json = JSON.stringify(data);
-  if (json.length <= CHUNK_SIZE) {
+  var jsonByteLength = new TextEncoder().encode(JSON.stringify(data)).length;
+  if (jsonByteLength <= CHUNK_SIZE) {
     p.postMessage(data);
   } else {
     // Chunk the HTML
@@ -45,8 +45,15 @@ function sendChunked(p, data) {
   var html = data.html;
   var id = crypto.randomUUID();
   var chunks = [];
-  for (var i = 0; i < html.length; i += CHUNK_SIZE) {
-    chunks.push(html.substring(i, i + CHUNK_SIZE));
+  var i = 0;
+  while (i < html.length) {
+    var end = Math.min(i + CHUNK_SIZE, html.length);
+    // Don't split a UTF-16 surrogate pair
+    if (end < html.length && html.charCodeAt(end - 1) >= 0xd800 && html.charCodeAt(end - 1) <= 0xdbff) {
+      end++;
+    }
+    chunks.push(html.substring(i, end));
+    i = end;
   }
   var total = chunks.length;
 

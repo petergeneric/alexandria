@@ -18,10 +18,12 @@
     "activeTab",
     "tabs",
     "contextMenus",
-    "notifications",
     "storage",
     "nativeMessaging"
   ],
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'none'"
+  },
   "background": {
     "scripts": ["rules.js", "background.js"]
   },

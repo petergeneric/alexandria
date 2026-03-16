@@ -159,7 +159,7 @@ private struct PendingStatusBar: View {
 
     private static func relativeAge(_ date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "minute" }
+        if seconds < 60 { return "just now" }
         let minutes = seconds / 60
         if minutes < 60 {
             return minutes == 1 ? "minute" : "\(minutes) minutes"

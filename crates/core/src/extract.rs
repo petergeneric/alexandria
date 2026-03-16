@@ -78,11 +78,11 @@ fn extract_title_inner(html: &str) -> Option<String> {
 
 /// Extract a URL from HTML via <link rel="canonical"> or <meta property="og:url">.
 pub fn extract_url_from_html(html: &str) -> Option<String> {
-    extract_canonical(html).or_else(|| extract_og_url(html))
+    let lower = html.to_lowercase();
+    extract_canonical(html, &lower).or_else(|| extract_og_url(html, &lower))
 }
 
-fn extract_meta_attr(html: &str, selector: &str, attr: &str) -> Option<String> {
-    let lower = html.to_lowercase();
+fn extract_meta_attr(html: &str, lower: &str, selector: &str, attr: &str) -> Option<String> {
     let idx = lower.find(selector)?;
     let tag_start = lower[..idx].rfind('<')?;
     let tag_end = lower[idx..].find('>')? + idx;
@@ -90,12 +90,12 @@ fn extract_meta_attr(html: &str, selector: &str, attr: &str) -> Option<String> {
     extract_attr_value(tag, attr)
 }
 
-fn extract_canonical(html: &str) -> Option<String> {
-    extract_meta_attr(html, "rel=\"canonical\"", "href")
+fn extract_canonical(html: &str, lower: &str) -> Option<String> {
+    extract_meta_attr(html, lower, "rel=\"canonical\"", "href")
 }
 
-fn extract_og_url(html: &str) -> Option<String> {
-    extract_meta_attr(html, "property=\"og:url\"", "content")
+fn extract_og_url(html: &str, lower: &str) -> Option<String> {
+    extract_meta_attr(html, lower, "property=\"og:url\"", "content")
 }
 
 fn extract_attr_value(tag: &str, attr: &str) -> Option<String> {
