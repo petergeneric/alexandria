@@ -202,6 +202,12 @@ class SearchViewModel: ObservableObject {
             try? fm.createDirectory(at: indexDir, withIntermediateDirectories: true)
         }
 
+        // Exclude the index from Time Machine backups — it can be rebuilt from the SQLite store.
+        var url = indexDir
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        try? url.setResourceValues(resourceValues)
+
         return path
     }
 }
