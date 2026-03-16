@@ -160,11 +160,23 @@ var AlexRules = (function () {{
     return true;
   }}
 
+  // Merge additional blocked domains (from native host) into the Sets.
+  function mergeBlockedDomains(domains) {{
+    if (!domains || !domains.length) return;
+    for (var i = 0; i < domains.length; i++) {{
+      var d = domains[i];
+      var depth = d.split(".").length;
+      if (!BLOCKED_BY_DEPTH[depth]) BLOCKED_BY_DEPTH[depth] = new Set();
+      BLOCKED_BY_DEPTH[depth].add(d);
+    }}
+  }}
+
   return {{
     isSpecialPage: isSpecialPage,
     shouldSkipMime: shouldSkipMime,
     shouldAutoSave: shouldAutoSave,
     matchesDomain: matchesDomain,
+    mergeBlockedDomains: mergeBlockedDomains,
   }};
 }})();
 

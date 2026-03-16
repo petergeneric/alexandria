@@ -23,6 +23,8 @@ pub enum IncomingMessage {
     },
     #[serde(rename = "ping")]
     Ping,
+    #[serde(rename = "get_blocklist")]
+    GetBlocklist,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +43,8 @@ pub struct HostResponse {
     pub message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocked_domains: Option<Vec<String>>,
 }
 
 impl HostResponse {
@@ -49,6 +53,7 @@ impl HostResponse {
             status: "ok".into(),
             message: None,
             version: None,
+            blocked_domains: None,
         }
     }
 
@@ -57,6 +62,7 @@ impl HostResponse {
             status: "error".into(),
             message: Some(msg.into()),
             version: None,
+            blocked_domains: None,
         }
     }
 
@@ -65,6 +71,16 @@ impl HostResponse {
             status: "ok".into(),
             message: None,
             version: Some("1.0".into()),
+            blocked_domains: None,
+        }
+    }
+
+    pub fn blocklist(domains: Vec<String>) -> Self {
+        Self {
+            status: "ok".into(),
+            message: None,
+            version: None,
+            blocked_domains: Some(domains),
         }
     }
 }

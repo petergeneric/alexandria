@@ -1,5 +1,6 @@
 mod protocol;
 
+use alexandria_core::blocklist::Blocklist;
 use alexandria_core::extract;
 use alexandria_core::filter;
 use alexandria_core::page_store::PageStore;
@@ -189,6 +190,9 @@ fn main() {
 
         let response = match msg {
             IncomingMessage::Ping => HostResponse::pong(),
+            IncomingMessage::GetBlocklist => {
+                HostResponse::blocklist(Blocklist::load().blocked_domains())
+            }
             IncomingMessage::Snapshot {
                 url,
                 title,

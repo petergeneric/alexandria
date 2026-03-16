@@ -17,7 +17,12 @@ function connectNative() {
       if (response.status === "error") {
         console.error("Alexandria: native host error:", response.message);
       }
+      if (response.blocked_domains) {
+        AlexRules.mergeBlockedDomains(response.blocked_domains);
+      }
     });
+    // Request the latest blocklist from the native host
+    port.postMessage({ type: "get_blocklist" });
   } catch (e) {
     console.error("Alexandria: failed to connect to native host:", e);
     port = null;

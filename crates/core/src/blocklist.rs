@@ -75,6 +75,14 @@ impl Blocklist {
         false
     }
 
+    /// Return all blocked domains as a flat list.
+    pub fn blocked_domains(&self) -> Vec<String> {
+        self.blocked_by_depth
+            .values()
+            .flat_map(|set| set.iter().cloned())
+            .collect()
+    }
+
     fn is_domain_blocked(&self, hostname: &str) -> bool {
         for (&depth, set) in &self.blocked_by_depth {
             if let Some(suffix) = domain_suffix(hostname, depth) {
