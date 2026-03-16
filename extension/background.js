@@ -2,6 +2,7 @@
 
 const NATIVE_HOST = "alexandria";
 const CHUNK_SIZE = 900 * 1024; // ~900KB per chunk to stay under 1MB native messaging limit
+const MAX_PAGE_SIZE = 5 * 1024 * 1024; // 5MB max page size
 
 let port = null;
 
@@ -34,6 +35,12 @@ function sendToNative(data) {
   var p = connectNative();
   if (!p) {
     console.error("Alexandria: no native connection");
+    return;
+  }
+
+  var htmlByteLength = new TextEncoder().encode(data.html || "").length;
+  if (htmlByteLength > MAX_PAGE_SIZE) {
+    console.warn("Alexandria: page too large (" + (htmlByteLength / 1024 / 1024).toFixed(1) + "MB), skipping:", data.url);
     return;
   }
 
