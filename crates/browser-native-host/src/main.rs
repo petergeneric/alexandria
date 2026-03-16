@@ -96,6 +96,8 @@ fn write_message(stdout: &mut impl Write, response: &HostResponse) -> io::Result
     Ok(())
 }
 
+const MAX_PAGE_SIZE: usize = 5 * 1024 * 1024; // 5MB max page size
+
 fn handle_snapshot(
     store: &PageStore,
     dedup: &mut DedupCache,
@@ -104,6 +106,14 @@ fn handle_snapshot(
     html: &str,
     timestamp: Option<i64>,
 ) -> HostResponse {
+    if html.len() > MAX_PAGE_SIZE {
+        tracing::warn!(
+            "Page too large ({:.1}MB), skipping: {url}",
+            html.len() as f64 / 1024.0 / 1024.0
+        );
+        return HostResponse::ok();
+    }
+
     // Dedup on page content — same URL may produce different HTML over time
     let hash = content_hash(html.as_bytes());
     if dedup.check_and_insert(hash) {
