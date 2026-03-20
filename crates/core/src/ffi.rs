@@ -93,21 +93,22 @@ struct ConvertedPages {
     failures: Vec<IngestFailure>,
 }
 
-fn snapshots_from_pages(pages: &[StoredPage]) -> ConvertedPages {
+fn snapshots_from_pages(pages: Vec<StoredPage>) -> ConvertedPages {
     let mut snapshots = Vec::new();
     let mut failures = Vec::new();
 
     for p in pages {
-        let content = if p.html.starts_with('<') {
-            let html = p.html.clone();
-            let domain = p.domain.clone();
+        let is_html = p.html.starts_with('<');
+        let content = if is_html {
+            let domain_for_filter = p.domain.clone();
+            let html = p.html;
             // Spawn with 8 MB stack to handle deeply nested HTML without overflow,
             // and catch_unwind to skip pages that still manage to blow the stack.
             let result = std::thread::Builder::new()
                 .stack_size(8 * 1024 * 1024)
                 .spawn(move || {
                     std::panic::catch_unwind(|| {
-                        let filtered_html = filter::filter_html(&html, &domain);
+                        let filtered_html = filter::filter_html(&html, &domain_for_filter);
                         extract::html_to_plaintext(&filtered_html)
                     })
                 })
@@ -120,23 +121,23 @@ fn snapshots_from_pages(pages: &[StoredPage]) -> ConvertedPages {
                     tracing::warn!(url = %p.url, "Skipping page: HTML conversion failed (deeply nested HTML)");
                     failures.push(IngestFailure {
                         page_id: p.id,
-                        url: p.url.clone(),
-                        domain: p.domain.clone(),
+                        url: p.url,
+                        domain: p.domain,
                         reason: "HTML conversion failed (deeply nested HTML)".into(),
                     });
                     continue;
                 }
             }
         } else {
-            p.html.clone()
+            p.html
         };
         snapshots.push(PageSnapshot {
             page_id: p.id,
-            url: p.url.clone(),
-            title: p.title.clone(),
+            url: p.url,
+            title: p.title,
             content,
-            domain: p.domain.clone(),
-            site_group: p.site_group.clone(),
+            domain: p.domain,
+            site_group: p.site_group,
             captured_at: p.captured_at,
         });
     }
@@ -278,7 +279,6 @@ impl AlexandriaEngine {
             PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
-        let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let fields = SchemaFields::from_index(&self.index).map_err(|e| {
             AlexandriaError::IngestFailed {
@@ -298,9 +298,12 @@ impl AlexandriaEngine {
             reason: e.to_string(),
         })?;
 
-        app_db.set_watermark(0).map_err(|e| AlexandriaError::IngestFailed {
-            reason: e.to_string(),
-        })?;
+        {
+            let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            app_db.set_watermark(0).map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        }
 
         let mut total = 0u64;
         let mut watermark: i64 = 0;
@@ -313,11 +316,7 @@ impl AlexandriaEngine {
             }
 
             let max_id = pages.iter().map(|p| p.id).max().unwrap_or(watermark);
-            let converted = snapshots_from_pages(&pages);
-
-            for f in &converted.failures {
-                let _ = app_db.log_ingest_failure(f.page_id, &f.url, &f.domain, &f.reason);
-            }
+            let converted = snapshots_from_pages(pages);
 
             let indexed =
                 index_snapshots(&mut writer, &fields, converted.snapshots).map_err(|e| {
@@ -327,16 +326,26 @@ impl AlexandriaEngine {
                 })?;
 
             watermark = max_id;
-            app_db.set_watermark(watermark).map_err(|e| AlexandriaError::IngestFailed {
-                reason: e.to_string(),
-            })?;
+
+            {
+                let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                for f in &converted.failures {
+                    let _ = app_db.log_ingest_failure(f.page_id, &f.url, &f.domain, &f.reason);
+                }
+                app_db.set_watermark(watermark).map_err(|e| AlexandriaError::IngestFailed {
+                    reason: e.to_string(),
+                })?;
+            }
 
             total += indexed as u64;
         }
 
-        app_db.set_schema_revision(SCHEMA_REVISION).map_err(|e| AlexandriaError::IngestFailed {
-            reason: e.to_string(),
-        })?;
+        {
+            let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            app_db.set_schema_revision(SCHEMA_REVISION).map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        }
 
         Ok(total)
     }
@@ -364,11 +373,13 @@ impl AlexandriaEngine {
             PageStore::open(Path::new(&store_path)).map_err(|e| AlexandriaError::IngestFailed {
                 reason: e.to_string(),
             })?;
-        let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        let watermark = app_db.get_watermark().map_err(|e| AlexandriaError::IngestFailed {
-            reason: e.to_string(),
-        })?;
+        let watermark = {
+            let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            app_db.get_watermark().map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?
+        };
 
         let pages = store.pages_after(watermark, 5000).map_err(|e| AlexandriaError::IngestFailed {
             reason: e.to_string(),
@@ -379,11 +390,7 @@ impl AlexandriaEngine {
         }
 
         let max_id = pages.iter().map(|p| p.id).max().unwrap_or(watermark);
-        let converted = snapshots_from_pages(&pages);
-
-        for f in &converted.failures {
-            let _ = app_db.log_ingest_failure(f.page_id, &f.url, &f.domain, &f.reason);
-        }
+        let converted = snapshots_from_pages(pages);
 
         let fields = SchemaFields::from_index(&self.index).map_err(|e| {
             AlexandriaError::IngestFailed {
@@ -404,9 +411,15 @@ impl AlexandriaEngine {
                 }
             })?;
 
-        app_db.set_watermark(max_id).map_err(|e| AlexandriaError::IngestFailed {
-            reason: e.to_string(),
-        })?;
+        {
+            let app_db = self.app_db.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            for f in &converted.failures {
+                let _ = app_db.log_ingest_failure(f.page_id, &f.url, &f.domain, &f.reason);
+            }
+            app_db.set_watermark(max_id).map_err(|e| AlexandriaError::IngestFailed {
+                reason: e.to_string(),
+            })?;
+        }
 
         Ok(indexed as u64)
     }
