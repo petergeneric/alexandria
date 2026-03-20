@@ -48,10 +48,8 @@ cargo test -p alexandria-core
 
 | Crate | Purpose |
 |-------|---------|
-| `htmd` | HTML to Markdown conversion |
-| `markdown_to_text` | Markdown to plaintext stripping |
 | `tantivy` | Full-text search engine |
-| `scraper` | HTML parsing for site-specific filtering |
+| `scraper` | HTML parsing for site-specific filtering and plaintext extraction |
 | `uniffi` | Rust-to-Swift FFI binding generator |
 | `clap` | CLI argument parsing |
 | `dirs` | Home directory expansion for `~` paths |

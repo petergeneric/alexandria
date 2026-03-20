@@ -77,6 +77,5 @@
 | SQLite | Reliable page storage with compression (zstd) |
 | UniFFI | Mozilla's Rust-to-Swift binding generator with proc-macro annotations |
 | crossbeam-channel | Bounded, backpressure-aware channel for producer/consumer |
-| scraper | HTML parsing and site-specific content filtering |
-| htmd | HTML to Markdown conversion (intermediate step for plaintext extraction) |
+| scraper | HTML parsing, site-specific filtering, and iterative plaintext extraction |
 | clap | CLI argument parsing with derive macros |

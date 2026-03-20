@@ -24,7 +24,7 @@ cargo build --workspace
 
 ## Architecture
 
-- **HTML → Plaintext**: `htmd` (HTML→Markdown) then `markdown_to_text` (Markdown→plaintext), used for search indexing and snippet generation
+- **HTML → Plaintext**: Iterative DOM traversal via `scraper` extracts text nodes, skipping script/style/noscript
 - **HTML filtering**: Site-specific CSS selectors (`scraper`) strip boilerplate (HN, Reddit, Bluesky) before text extraction
 - **Search index**: Tantivy — plaintext is indexed, raw HTML is stored
 - **Title extraction**: Simple `<title>` tag parser (no external dependency)
@@ -47,10 +47,8 @@ cargo build --workspace
 
 ## Dependencies
 
-- `htmd` — HTML to Markdown (intermediate step for plaintext extraction)
-- `markdown_to_text` — Markdown to plaintext (final step for plaintext extraction)
 - `tantivy` — full-text search engine
-- `scraper` — HTML parsing for site-specific content filtering
+- `scraper` — HTML parsing for site-specific content filtering and plaintext extraction
 - `uniffi` — Rust-to-Swift FFI binding generator
 - `notify` — cross-platform filesystem watching
 - `crossbeam-channel` — bounded channel for ingestion queue

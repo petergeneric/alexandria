@@ -115,18 +115,8 @@ impl SearchEngine {
                 .and_then(|s| s.get_html_by_id(page_id as i64).ok().flatten())
                 .and_then(|content| {
                     let plaintext = if content.starts_with('<') {
-                        let domain = domain.clone();
-                        std::thread::Builder::new()
-                            .stack_size(8 * 1024 * 1024)
-                            .spawn(move || {
-                                std::panic::catch_unwind(|| {
-                                    let filtered = filter::filter_html(&content, &domain);
-                                    extract::html_to_plaintext(&filtered)
-                                })
-                            })
-                            .ok()
-                            .and_then(|h| h.join().ok())
-                            .and_then(|r| r.ok())?
+                        let filtered = filter::filter_html(&content, &domain);
+                        extract::html_to_plaintext(&filtered)
                     } else {
                         content
                     };

@@ -1,59 +1,38 @@
-//! HTML extraction utilities: HTML → Markdown → plaintext pipeline,
+//! HTML extraction utilities: iterative plaintext extraction via `scraper`,
 //! title extraction, URL extraction, and domain extraction.
 
-use htmd::HtmlToMarkdown;
+use scraper::{Html, Node};
 
-/// Convert HTML to Markdown, preserving structure but stripping bold/italic.
-pub fn html_to_markdown(html: &str) -> String {
-    let converter = HtmlToMarkdown::builder()
-        .skip_tags(vec!["script", "style", "nav", "footer", "header"])
-        .add_handler(vec!["b", "strong", "i", "em"], |handlers: &dyn htmd::element_handler::Handlers, element: htmd::Element| {
-            let content = handlers.walk_children(element.node).content;
-            if content.is_empty() {
-                None
-            } else {
-                Some(content.into())
-            }
-        })
-        .build();
-    match converter.convert(html) {
-        Ok(md) => md,
-        Err(e) => {
-            tracing::warn!("HTML to markdown conversion failed: {e}");
-            String::new()
-        }
-    }
-}
-
-/// Convert Markdown to plain text, stripping all formatting.
-pub fn markdown_to_plaintext(md: &str) -> String {
-    let text = markdown_to_text::convert(md);
-    // Clean up residual table pipe characters
-    let text = text.replace(" | ", " ").replace("| ", "").replace(" |", "");
-    // Strip any residual HTML tags that htmd passed through unconverted
-    let text = strip_html_tags(&text);
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// Remove HTML tags from text, preserving the text content between them.
-fn strip_html_tags(input: &str) -> String {
-    let mut output = String::with_capacity(input.len());
-    let mut in_tag = false;
-    for ch in input.chars() {
-        match ch {
-            '<' => in_tag = true,
-            '>' if in_tag => in_tag = false,
-            _ if !in_tag => output.push(ch),
-            _ => {}
-        }
-    }
-    output
-}
+/// Tags whose text content should be excluded from plaintext output.
+const SKIP_TAGS: &[&str] = &["script", "style", "noscript"];
 
 /// Convert HTML to plain text for search indexing.
+///
+/// Iterates the parsed DOM tree (no recursion) and collects text nodes,
+/// skipping `<script>`, `<style>`, and `<noscript>` elements.
 pub fn html_to_plaintext(html: &str) -> String {
-    let md = html_to_markdown(html);
-    markdown_to_plaintext(&md)
+    let document = Html::parse_document(html);
+    let mut parts: Vec<&str> = Vec::new();
+
+    for node in document.tree.nodes() {
+        if let Node::Text(text) = node.value() {
+            // Skip text inside excluded elements.
+            let dominated_by_skip = node.ancestors().any(|ancestor| {
+                ancestor
+                    .value()
+                    .as_element()
+                    .is_some_and(|el| SKIP_TAGS.contains(&el.name()))
+            });
+            if !dominated_by_skip {
+                let t = text.trim();
+                if !t.is_empty() {
+                    parts.push(t);
+                }
+            }
+        }
+    }
+
+    parts.join(" ")
 }
 
 /// Extract the `<title>` from an HTML document using simple string parsing.

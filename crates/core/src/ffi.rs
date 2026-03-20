@@ -115,33 +115,8 @@ fn snapshots_from_pages(pages: Vec<StoredPage>) -> ConvertedPages {
 
         let is_html = html.starts_with('<');
         let content = if is_html {
-            let domain_for_filter = p.domain.clone();
-            // Spawn with 8 MB stack to handle deeply nested HTML without overflow,
-            // and catch_unwind to skip pages that still manage to blow the stack.
-            let result = std::thread::Builder::new()
-                .stack_size(8 * 1024 * 1024)
-                .spawn(move || {
-                    std::panic::catch_unwind(|| {
-                        let filtered_html = filter::filter_html(&html, &domain_for_filter);
-                        extract::html_to_plaintext(&filtered_html)
-                    })
-                })
-                .ok()
-                .and_then(|h| h.join().ok())
-                .and_then(|r| r.ok());
-            match result {
-                Some(text) => text,
-                None => {
-                    tracing::warn!(url = %p.url, "Skipping page: HTML conversion failed (deeply nested HTML)");
-                    failures.push(IngestFailure {
-                        page_id: p.id,
-                        url: p.url,
-                        domain: p.domain,
-                        reason: "HTML conversion failed (deeply nested HTML)".into(),
-                    });
-                    continue;
-                }
-            }
+            let filtered_html = filter::filter_html(&html, &p.domain);
+            extract::html_to_plaintext(&filtered_html)
         } else {
             html
         };

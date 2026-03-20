@@ -36,8 +36,7 @@ Pages are captured by the Firefox browser extension and stored in a SQLite datab
 ```
 Raw HTML
   -> filter_html (site-specific CSS selector removal)
-  -> htmd (HTML to Markdown, skip nav/script/style, strip bold/italic)
-  -> markdown_to_text (Markdown to plaintext, clean table pipes)
+  -> html_to_plaintext (iterative DOM text extraction via scraper, skip script/style/noscript)
   -> extract_title (simple <title> tag parser)
   -> extract_domain (url crate)
 ```
