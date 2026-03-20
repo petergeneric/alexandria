@@ -49,7 +49,12 @@ class SearchViewModel: ObservableObject {
     @Published var siteFacetMode: SiteFacetMode = .siteGroup
     @Published var pendingCount: UInt64 = 0
     @Published var pendingOldest: Date? = nil
-    @Published var isIndexing = false
+    @Published var isIndexingManual = false
+
+    /// True when either a manual "Index Now" or background ingestion is running.
+    var isIndexing: Bool {
+        isIndexingManual || (ingester?.isRunning ?? false)
+    }
 
     private func facetKey(_ result: SearchResult) -> String {
         siteFacetMode == .siteGroup ? result.siteGroup : result.domain
@@ -90,8 +95,10 @@ class SearchViewModel: ObservableObject {
     private let engine: SearchEngineWrapper?
     private let storePath: String
     private var debounceTask: Task<Void, Never>?
+    private weak var ingester: Ingester?
 
-    init() {
+    init(ingester: Ingester? = nil) {
+        self.ingester = ingester
         let indexPath = Self.resolveIndexPath()
         engine = SearchEngineWrapper(indexPath: indexPath, appDbPath: AppSettings.defaultAppDbPath)
         storePath = AppSettings.shared.storePath
@@ -117,6 +124,22 @@ class SearchViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // When the background ingester finishes, refresh pending count and re-run search
+        if let ingester = ingester {
+            ingester.$isRunning
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] running in
+                    self?.objectWillChange.send()
+                    if !running {
+                        // Ingester just finished — refresh search results and pending count
+                        if let self = self, !self.query.isEmpty {
+                            self.performSearch()
+                        }
+                    }
+                }
+                .store(in: &cancellables)
+        }
 
         // Clear domain selections when facet mode changes
         $siteFacetMode
@@ -155,7 +178,7 @@ class SearchViewModel: ObservableObject {
 
     func indexNow() {
         guard let engine = engine, !isIndexing else { return }
-        isIndexing = true
+        isIndexingManual = true
         let sp = storePath
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -165,7 +188,7 @@ class SearchViewModel: ObservableObject {
                 guard let self = self else { return }
                 self.pendingCount = status.count
                 self.pendingOldest = status.oldestCapturedAt
-                self.isIndexing = false
+                self.isIndexingManual = false
                 // Re-run search to include newly indexed pages
                 if !self.query.isEmpty {
                     self.performSearch()

@@ -62,7 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showSearchPanel() {
         if searchPanel == nil {
-            searchPanel = SearchPanel()
+            searchPanel = SearchPanel(ingester: ingester)
         }
         searchPanel?.clearIfStale()
         searchPanel?.makeKeyAndOrderFront(nil)

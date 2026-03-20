@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 class SearchPanel: NSPanel {
-    let viewModel = SearchViewModel()
+    let viewModel: SearchViewModel
     private var eventMonitor: Any?
 
     override var canBecomeKey: Bool { true }
@@ -13,7 +13,8 @@ class SearchPanel: NSPanel {
         }
     }
 
-    init() {
+    init(ingester: Ingester? = nil) {
+        self.viewModel = SearchViewModel(ingester: ingester)
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 880, height: 480),
             styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .utilityWindow],

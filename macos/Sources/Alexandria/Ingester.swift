@@ -1,13 +1,15 @@
+import Combine
 import Foundation
 import IOKit.ps
 
-class Ingester {
+class Ingester: ObservableObject {
     private static let lowBatteryThreshold = 20
+
+    @Published private(set) var isRunning = false
 
     private let engine: SearchEngineWrapper
     private let settings: AppSettings
     private var timer: Timer?
-    private var isRunning = false
     private var isLowPowerMode: Bool
     private var powerSourceRunLoopSource: CFRunLoopSource?
 
@@ -115,7 +117,9 @@ class Ingester {
                 }
             }
 
-            self.isRunning = false
+            DispatchQueue.main.async {
+                self.isRunning = false
+            }
         }
     }
 
