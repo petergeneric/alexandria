@@ -98,10 +98,24 @@ fn snapshots_from_pages(pages: Vec<StoredPage>) -> ConvertedPages {
     let mut failures = Vec::new();
 
     for p in pages {
-        let is_html = p.html.starts_with('<');
+        // Decompress one page at a time to keep memory usage low.
+        let html = match p.decompress_html() {
+            Ok(h) => h,
+            Err(e) => {
+                tracing::warn!(url = %p.url, "Skipping page: decompression failed: {e}");
+                failures.push(IngestFailure {
+                    page_id: p.id,
+                    url: p.url,
+                    domain: p.domain,
+                    reason: format!("Decompression failed: {e}"),
+                });
+                continue;
+            }
+        };
+
+        let is_html = html.starts_with('<');
         let content = if is_html {
             let domain_for_filter = p.domain.clone();
-            let html = p.html;
             // Spawn with 8 MB stack to handle deeply nested HTML without overflow,
             // and catch_unwind to skip pages that still manage to blow the stack.
             let result = std::thread::Builder::new()
@@ -129,7 +143,7 @@ fn snapshots_from_pages(pages: Vec<StoredPage>) -> ConvertedPages {
                 }
             }
         } else {
-            p.html
+            html
         };
         snapshots.push(PageSnapshot {
             page_id: p.id,

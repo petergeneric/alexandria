@@ -19,10 +19,26 @@ pub struct StoredPage {
     pub id: i64,
     pub url: String,
     pub title: String,
-    pub html: String,
+    /// zstd-compressed HTML — decompress with [`StoredPage::decompress_html`].
+    pub html_compressed: Vec<u8>,
     pub domain: String,
     pub site_group: String,
     pub captured_at: i64,
+}
+
+impl StoredPage {
+    /// Decompress the stored HTML into a UTF-8 string.
+    pub fn decompress_html(&self) -> Result<String, PageStoreError> {
+        let html_bytes = zstd::decode_all(self.html_compressed.as_slice())
+            .map_err(|e| PageStoreError::Compression(e.to_string()))?;
+        match String::from_utf8(html_bytes) {
+            Ok(s) => Ok(s),
+            Err(e) => {
+                tracing::warn!("Page has invalid UTF-8, using lossy conversion");
+                Ok(String::from_utf8_lossy(e.as_bytes()).into_owned())
+            }
+        }
+    }
 }
 
 pub struct PageStore {
@@ -112,41 +128,18 @@ impl PageStore {
              LIMIT ?2",
         )?;
         let rows = stmt.query_map(params![watermark, limit as i64], |row| {
-            let compressed: Vec<u8> = row.get(3)?;
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                compressed,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, i64>(6)?,
-            ))
+            Ok(StoredPage {
+                id: row.get(0)?,
+                url: row.get(1)?,
+                title: row.get(2)?,
+                html_compressed: row.get(3)?,
+                domain: row.get(4)?,
+                site_group: row.get(5)?,
+                captured_at: row.get(6)?,
+            })
         })?;
 
-        let mut pages = Vec::new();
-        for row in rows {
-            let (id, url, title, compressed, domain, site_group, captured_at) = row?;
-            let html_bytes = zstd::decode_all(compressed.as_slice())
-                .map_err(|e| PageStoreError::Compression(e.to_string()))?;
-            let html = match String::from_utf8(html_bytes) {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::warn!(id, "Page has invalid UTF-8, using lossy conversion");
-                    String::from_utf8_lossy(e.as_bytes()).into_owned()
-                }
-            };
-            pages.push(StoredPage {
-                id,
-                url,
-                title,
-                html,
-                domain,
-                site_group,
-                captured_at,
-            });
-        }
-        Ok(pages)
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
     /// Returns (count, oldest_captured_at) for pages after the watermark, or (0, None) if none.
@@ -315,7 +308,7 @@ mod tests {
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].url, "https://example.com");
         assert_eq!(pages[0].title, "Example");
-        assert_eq!(pages[0].html, "<html><body>Hello</body></html>");
+        assert_eq!(pages[0].decompress_html().unwrap(), "<html><body>Hello</body></html>");
         assert!(pages[0].id > 0);
     }
 
@@ -372,7 +365,7 @@ mod tests {
             .insert("https://big.com", "Big", html.as_bytes(), "big.com", "big.com", 1000, &hash(html.as_bytes()))
             .unwrap();
         let pages = store.pages_after(0, 10).unwrap();
-        assert_eq!(pages[0].html, html);
+        assert_eq!(pages[0].decompress_html().unwrap(), html);
     }
 
     #[test]

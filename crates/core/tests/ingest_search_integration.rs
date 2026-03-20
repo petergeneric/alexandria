@@ -95,7 +95,8 @@ impl TestHarness {
         let snapshots: Vec<PageSnapshot> = pages
             .iter()
             .map(|p| {
-                let content = content_to_plaintext(&p.html, &p.domain);
+                let html = p.decompress_html().unwrap();
+                let content = content_to_plaintext(&html, &p.domain);
                 PageSnapshot {
                     page_id: p.id,
                     url: p.url.clone(),
@@ -363,10 +364,11 @@ fn test_plaintext_not_starting_with_angle_bracket() {
 
     // Verify what was stored doesn't start with '<' (would be misidentified as HTML)
     let pages = h.store.pages_after(0, 10).unwrap();
+    let html = pages[0].decompress_html().unwrap();
     assert!(
-        !pages[0].html.starts_with('<'),
+        !html.starts_with('<'),
         "stored plaintext should not start with '<', got: {:?}",
-        &pages[0].html[..20.min(pages[0].html.len())]
+        &html[..20.min(html.len())]
     );
 
     h.index_pages(0);
@@ -458,10 +460,11 @@ fn test_filtered_domain_html_without_leading_angle_bracket() {
 
     // Verify the stored content starts with '<' (the doctype prefix)
     let pages = h.store.pages_after(0, 10).unwrap();
+    let html = pages[0].decompress_html().unwrap();
     assert!(
-        pages[0].html.starts_with('<'),
+        html.starts_with('<'),
         "stored HTML for filtered site should start with '<', got: {:?}",
-        &pages[0].html[..30.min(pages[0].html.len())]
+        &html[..30.min(html.len())]
     );
 
     h.index_pages(0);
